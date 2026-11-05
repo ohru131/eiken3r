@@ -12,20 +12,21 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 const serverKey = process.env.ANTHROPIC_API_KEY || '';
-const defaultModel = normalizeModel(process.env.CLAUDE_MODEL);
+const evalModel = normalizeModel(process.env.CLAUDE_EVAL_MODEL || 'claude-haiku-5-5');
+const reportModel = normalizeModel(process.env.CLAUDE_REPORT_MODEL || 'claude-sonnet-5-5');
 
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/status', (_req, res) => {
-  res.json({ serverKey: !!serverKey, defaultModel });
+  res.json({ serverKey: !!serverKey, defaultModel: evalModel });
 });
 
-const model = (req: express.Request) => normalizeModel(req.header('x-claude-model') || defaultModel);
+const model = (req: express.Request, fallback: string) => normalizeModel(req.header('x-claude-model') || fallback);
 
 app.post('/api/evaluate', async (req, res) => {
   if (!serverKey) return res.status(400).json({ error: 'no_key' });
   try {
-    res.json(await evaluateWithClaude(createClient(serverKey, false), model(req), req.body || {}));
+    res.json(await evaluateWithClaude(createClient(serverKey, false), model(req, evalModel), req.body || {}));
   } catch (err) {
     const e = describeError(err);
     if (e.status >= 500) console.error(err);
@@ -36,7 +37,7 @@ app.post('/api/evaluate', async (req, res) => {
 app.post('/api/report', async (req, res) => {
   if (!serverKey) return res.status(400).json({ error: 'no_key' });
   try {
-    res.json(await reportWithClaude(createClient(serverKey, false), model(req), req.body || {}));
+    res.json(await reportWithClaude(createClient(serverKey, false), model(req, reportModel), req.body || {}));
   } catch (err) {
     const e = describeError(err);
     if (e.status >= 500) console.error(err);
