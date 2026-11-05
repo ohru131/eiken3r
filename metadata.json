@@ -1,0 +1,9 @@
+{
+  "name": "英検3級 2次試験 面接シミュレーター",
+  "description": "英検3級の2次面接試験を完全再現。面接官アバター、リアルタイム音声認識、即時AIフィードバック、総合採点レポート、ステップアップ練習機能を搭載した実践的英検面接対策アプリ。",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
