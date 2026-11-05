@@ -1,764 +1,362 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  ExamCard,
-  ExaminerProfile,
-  SimulationStepId,
-  InterviewMode,
-  QuestionRecord,
-  StepFeedback,
-  FinalReportData,
-  HistoryRecord,
-} from './types';
-import { EXAM_CARDS, EXAMINERS } from './data/examCards';
-import { ExaminerAvatar } from './components/ExaminerAvatar';
-import { ProblemCardView } from './components/ProblemCardView';
-import { SpeechInputPanel } from './components/SpeechInputPanel';
-import { InstantFeedbackCard } from './components/InstantFeedbackCard';
-import { FinalReportModal } from './components/FinalReportModal';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BookOpen, Settings, Square, Subtitles, Languages, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { AnswerRecord, AppSettings, ExamCard, FinalReport, HistoryRecord, PhaseId, ScoredItem } from './types';
+import { EXAM_CARDS } from './data/examCards';
+import { EXAMINERS } from './data/examiners';
+import { loadHistory, loadSettings, saveHistory, saveSettings } from './lib/settings';
+import { ServerStatus, canUseClaude, fetchStatus, generateReport, EvalResult } from './lib/api';
+import { setSfxEnabled, playSfx, unlockAudio } from './lib/sfx';
+import { AbortedError, speak, stopSpeaking } from './lib/speech';
+import { PASS_LINE, scoreAttitude } from './lib/scoring';
+import { Bridge, CardState, FeedbackAction, runInterview } from './engine/interview';
+import { HomeScreen } from './components/HomeScreen';
+import { ExaminerFigure } from './components/ExaminerFigure';
+import { ExamCardView } from './components/ExamCardView';
+import { MicBar } from './components/MicBar';
+import { FeedbackPanel } from './components/FeedbackPanel';
+import { ReportView } from './components/ReportView';
+import { SettingsModal } from './components/SettingsModal';
 import { StrategyGuideModal } from './components/StrategyGuideModal';
-import { CardSelectorModal } from './components/CardSelectorModal';
-import {
-  Volume2,
-  VolumeX,
-  BookOpen,
-  Sparkles,
-  RefreshCw,
-  Award,
-  ChevronRight,
-  HelpCircle,
-  Layers,
-  Settings2,
-  Play,
-  RotateCcw,
-  Maximize,
-  Minimize,
-  FileText,
-} from 'lucide-react';
+
+type Screen = 'home' | 'interview' | 'report';
+
+const STEPS: { id: PhaseId[]; label: string }[] = [
+  { id: ['entrance', 'greeting'], label: '入室' },
+  { id: ['silent_reading'], label: '黙読' },
+  { id: ['reading_aloud'], label: '音読' },
+  { id: ['q1'], label: 'No.1' },
+  { id: ['q2'], label: 'No.2' },
+  { id: ['q3'], label: 'No.3' },
+  { id: ['turnover', 'q4'], label: 'No.4' },
+  { id: ['q5'], label: 'No.5' },
+  { id: ['exit', 'scoring'], label: '退室' },
+];
+const PHASE_ORDER: PhaseId[] = ['idle', 'entrance', 'greeting', 'silent_reading', 'reading_aloud', 'q1', 'q2', 'q3', 'turnover', 'q4', 'q5', 'exit', 'scoring', 'report'];
+
+interface PendingFeedback {
+  rec: AnswerRecord;
+  promise: Promise<EvalResult>;
+  resolve: (a: FeedbackAction) => void;
+}
 
 export default function App() {
-  // State: Selected Card, Examiner, Mode
-  const [selectedCard, setSelectedCard] = useState<ExamCard>(EXAM_CARDS[0]);
-  const [selectedExaminer, setSelectedExaminer] = useState<ExaminerProfile>(EXAMINERS[0]);
-  const [mode, setMode] = useState<InterviewMode>('exam');
+  const [settings, setSettings] = useState<AppSettings>(loadSettings);
+  const [status, setStatus] = useState<ServerStatus>({ serverKey: false, defaultModel: '' });
+  const [history, setHistory] = useState<HistoryRecord[]>(loadHistory);
+  const [screen, setScreen] = useState<Screen>('home');
+  const [card, setCard] = useState<ExamCard>(EXAM_CARDS[0]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [showSubs, setShowSubs] = useState(true);
+  const [showJa, setShowJa] = useState(false);
+  const [muted, setMuted] = useState(false);
 
-  // State: Interview Steps & Records
-  const [currentStep, setCurrentStep] = useState<SimulationStepId>('welcome_entrance');
-  const [currentSpeechText, setCurrentSpeechText] = useState<string>('');
-  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
-  const [isUserListening, setIsUserListening] = useState<boolean>(false);
-  const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
-  const [records, setRecords] = useState<QuestionRecord[]>([]);
-  const [currentFeedback, setCurrentFeedback] = useState<StepFeedback | null>(null);
-  const [lastUserAnswer, setLastUserAnswer] = useState<string>('');
-  const [pardonCount, setPardonCount] = useState<number>(0);
+  // interview live state
+  const [phase, setPhase] = useState<PhaseId>('idle');
+  const [line, setLine] = useState<{ text: string; ja?: string } | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [hint, setHint] = useState('');
+  const [interim, setInterim] = useState('');
+  const [silence, setSilence] = useState(0);
+  const [cardState, setCardState] = useState<CardState>('none');
+  const [timer, setTimer] = useState<number | null>(null);
+  const [records, setRecords] = useState<AnswerRecord[]>([]);
+  const [pending, setPending] = useState<PendingFeedback | null>(null);
+  const [report, setReport] = useState<FinalReport | null>(null);
+  const [aiPending, setAiPending] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Silent reading 20-second timer
-  const [silentTimer, setSilentTimer] = useState<number>(20);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+  const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
+  const useClaude = canUseClaude(settings, status);
 
-  // Final Report Data
-  const [finalReport, setFinalReport] = useState<FinalReportData | null>(null);
-  const [history, setHistory] = useState<HistoryRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem('eiken3_history');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // UI Modals, Fullscreen & Settings
-  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
-  const [isCardSelectorOpen, setIsCardSelectorOpen] = useState<boolean>(false);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [isCardFlipped, setIsCardFlipped] = useState<boolean>(false);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [rightPaneTab, setRightPaneTab] = useState<'card' | 'feedback'>('card');
-
-  // Monitor fullscreen change events
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    fetchStatus().then(setStatus);
   }, []);
+  useEffect(() => {
+    saveSettings(settings);
+    setSfxEnabled(settings.sfx);
+  }, [settings]);
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((err) => console.warn(err));
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch((err) => console.warn(err));
-      }
-    }
-  };
-
-  // Text-To-Speech function
-  const speakText = useCallback(
-    (text: string) => {
-      setCurrentSpeechText(text);
-      if (isMuted || !('speechSynthesis' in window)) return;
-
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.92; // Slightly natural and clear pace for Grade 3 candidates
-        utterance.pitch = 1.0;
-
-        const voices = window.speechSynthesis.getVoices();
-        const matchedVoice = voices.find((v) =>
-          selectedExaminer.speechVoiceNameHint.some((hint) => v.name.includes(hint) || v.lang.includes(hint))
-        );
-        if (matchedVoice) {
-          utterance.voice = matchedVoice;
-        }
-
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-
-        window.speechSynthesis.speak(utterance);
-      } catch (err) {
-        console.warn('TTS error:', err);
-        setIsSpeaking(false);
-      }
-    },
-    [isMuted, selectedExaminer]
+  const speakModel = useCallback(
+    (text: string) => speak(text, { voiceHints: examiner.voiceHints, rate: examiner.rate * settings.speechRate * 0.95, pitch: examiner.pitch, muted }),
+    [examiner, settings.speechRate, muted]
   );
 
-  // Initialize or Step Change Controller
-  useEffect(() => {
-    setCurrentFeedback(null);
-    setPardonCount(0);
-
-    let prompt = '';
-    switch (currentStep) {
-      case 'welcome_entrance':
-        prompt = 'Hello! May I have your score sheet, please?';
-        break;
-      case 'interview_warmup':
-        prompt = `Thank you. My name is ${selectedExaminer.name}. What's your name, please? And how are you today?`;
-        break;
-      case 'card_receive':
-        prompt = 'This is your card. Please take it and have a look.';
-        break;
-      case 'silent_reading':
-        prompt = 'First, please read the passage silently for 20 seconds. All right, begin.';
-        setSilentTimer(20);
-        setIsTimerRunning(true);
-        break;
-      case 'aloud_reading':
-        prompt = 'Now, please read the passage aloud.';
-        break;
-      case 'qa_no1':
-        prompt = selectedCard.question1.questionText;
-        break;
-      case 'qa_no2':
-        prompt = selectedCard.pictureA.questionText;
-        break;
-      case 'qa_no3':
-        prompt = selectedCard.pictureB.questionText;
-        break;
-      case 'card_turnover':
-        prompt = 'Now, please turn over the card and put it down.';
-        setIsCardFlipped(true);
-        break;
-      case 'qa_no4':
-        prompt = selectedCard.question4.questionText;
-        break;
-      case 'qa_no5':
-        prompt = selectedCard.question5.questionText;
-        break;
-      case 'exam_finish':
-        prompt = 'This is the end of the test. Could you give me the card back, please? You may go now. Have a nice day! Goodbye.';
-        break;
-      case 'final_report':
-        prompt = 'Here is your final evaluation report. Great effort today!';
-        break;
-      default:
-        prompt = 'Hello.';
-    }
-
-    speakText(prompt);
-  }, [currentStep, selectedCard, selectedExaminer]);
-
-  // Silent reading countdown timer
-  useEffect(() => {
-    let interval: any = null;
-    if (isTimerRunning && silentTimer > 0) {
-      interval = setInterval(() => {
-        setSilentTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (silentTimer === 0 && isTimerRunning) {
-      setIsTimerRunning(false);
-      // Auto move to reading aloud
-      setCurrentStep('aloud_reading');
-    }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, silentTimer]);
-
-  // Handle User Voice / Answer Submission
-  const handleAnswerSubmit = async (spokenText: string) => {
-    setLastUserAnswer(spokenText);
-    setIsEvaluating(true);
-
-    try {
-      // Setup payload for step evaluation
-      const payload = {
-        cardTitle: selectedCard.title,
-        stepId: currentStep,
-        stepType: currentStep,
-        promptQuestion: currentSpeechText,
-        passageText: selectedCard.passageText,
-        pictureInfo:
-          currentStep === 'qa_no2'
-            ? selectedCard.pictureA.title
-            : currentStep === 'qa_no3'
-            ? selectedCard.pictureB.title
-            : '',
-        userAnswer: spokenText,
-        targetGrammar:
-          currentStep === 'qa_no1'
-            ? selectedCard.question1.grammarKey
-            : currentStep === 'qa_no2'
-            ? selectedCard.pictureA.grammarKey
-            : currentStep === 'qa_no3'
-            ? selectedCard.pictureB.grammarKey
-            : 'Grade 3 standard spoken response',
-        modelAnswers:
-          currentStep === 'qa_no1'
-            ? selectedCard.question1.modelAnswers
-            : currentStep === 'qa_no2'
-            ? selectedCard.pictureA.modelAnswers
-            : currentStep === 'qa_no3'
-            ? selectedCard.pictureB.modelAnswers
-            : currentStep === 'qa_no4'
-            ? selectedCard.question4.modelAnswers
-            : currentStep === 'qa_no5'
-            ? selectedCard.question5.modelAnswers
-            : ['Here you are.', 'Thank you.'],
-      };
-
-      const res = await fetch('/api/evaluate-step', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const feedbackData: StepFeedback = await res.json();
-      setCurrentFeedback(feedbackData);
-      setRightPaneTab('feedback');
-
-      // Record question answer
-      setRecords((prev) => [
-        ...prev.filter((r) => r.stepId !== currentStep),
-        {
-          stepId: currentStep,
-          stepTitle: getStepDisplayName(currentStep),
-          examinerPrompt: currentSpeechText,
-          userSpokenText: spokenText,
-          feedback: feedbackData,
-          score: feedbackData.score,
-        },
-      ]);
-    } catch (err) {
-      console.error('Evaluation error:', err);
-      // Fallback feedback
-      const fallbackFeedback: StepFeedback = {
-        score: 4,
-        ratingLabel: 'Good Job!',
-        quickFeedback: 'しっかり声に出して英語で応答できました！',
-        grammarCheck: '主語と動詞をしっかり意識して答えられています。',
-        betterResponses: ['Very good answer.'],
-        keyTips: '笑顔と明瞭な発音を心がけましょう。',
-      };
-      setCurrentFeedback(fallbackFeedback);
-      setRightPaneTab('feedback');
-    } finally {
-      setIsEvaluating(false);
-    }
-  };
-
-  // Move to Next Step
-  const handleNextStep = () => {
-    setCurrentFeedback(null);
-    setLastUserAnswer('');
-    setRightPaneTab('card');
-    switch (currentStep) {
-      case 'welcome_entrance':
-        setCurrentStep('interview_warmup');
-        break;
-      case 'interview_warmup':
-        setCurrentStep('card_receive');
-        break;
-      case 'card_receive':
-        setCurrentStep('silent_reading');
-        break;
-      case 'silent_reading':
-        setIsTimerRunning(false);
-        setCurrentStep('aloud_reading');
-        break;
-      case 'aloud_reading':
-        setCurrentStep('qa_no1');
-        break;
-      case 'qa_no1':
-        setCurrentStep('qa_no2');
-        break;
-      case 'qa_no2':
-        setCurrentStep('qa_no3');
-        break;
-      case 'qa_no3':
-        setCurrentStep('card_turnover');
-        break;
-      case 'card_turnover':
-        setCurrentStep('qa_no4');
-        break;
-      case 'qa_no4':
-        setCurrentStep('qa_no5');
-        break;
-      case 'qa_no5':
-        setCurrentStep('exam_finish');
-        break;
-      case 'exam_finish':
-        generateFinalReport();
-        break;
-      default:
-        break;
-    }
-  };
-
-  // Generate Final Report using Gemini API
-  const generateFinalReport = async () => {
-    setIsEvaluating(true);
-    setCurrentStep('final_report');
-
-    try {
-      const payload = {
-        cardTitle: `${selectedCard.title} (${selectedCard.japaneseTitle})`,
-        userAnswersRecord: records,
-        attitudeObservations: {
-          pardonCount,
-          responsiveness: 'Prompt and clear voice',
-          eyeContact: 'Good',
-        },
-      };
-
-      const res = await fetch('/api/generate-final-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const reportData: FinalReportData = await res.json();
-      setFinalReport(reportData);
-
-      // Save to local history
-      const newHistoryItem: HistoryRecord = {
-        id: Date.now().toString(),
-        date: new Date().toLocaleDateString('ja-JP'),
-        cardId: selectedCard.id,
-        cardTitle: selectedCard.title,
-        mode,
-        totalScore: reportData.totalScore,
-        passed: reportData.passed,
-        gradeLabel: reportData.gradeLabel,
-      };
-
-      const updatedHistory = [newHistoryItem, ...history.slice(0, 19)];
-      setHistory(updatedHistory);
-      try {
-        localStorage.setItem('eiken3_history', JSON.stringify(updatedHistory));
-      } catch (e) {
-        // ignore
-      }
-    } catch (err) {
-      console.error('Final report generation error:', err);
-    } finally {
-      setIsEvaluating(false);
-    }
-  };
-
-  // Pardon Button Handler
-  const handlePardon = () => {
-    setPardonCount((prev) => prev + 1);
-    const pardonPrompt = `I will say it once more: ${currentSpeechText}`;
-    speakText(pardonPrompt);
-  };
-
-  // Replay Speech
-  const handleReplaySpeech = () => {
-    speakText(currentSpeechText);
-  };
-
-  // Step display name helper
-  const getStepDisplayName = (step: SimulationStepId): string => {
-    switch (step) {
-      case 'welcome_entrance':
-        return '入室・挨拶 (Entrance)';
-      case 'interview_warmup':
-        return '氏名確認・ウォームアップ (Warm-up)';
-      case 'card_receive':
-        return '問題カード受け取り (Card)';
-      case 'silent_reading':
-        return 'パッセージ黙読 20秒 (Silent Reading)';
-      case 'aloud_reading':
-        return 'パッセージ音読 (Reading Aloud)';
-      case 'qa_no1':
-        return 'No. 1 パッセージ質問 (Passage Q)';
-      case 'qa_no2':
-        return 'No. 2 イラストA 動作 (Picture A)';
-      case 'qa_no3':
-        return 'No. 3 イラストB 位置・数 (Picture B)';
-      case 'card_turnover':
-        return 'カードを裏返す (Turn over)';
-      case 'qa_no4':
-        return 'No. 4 受験者自身への質問1 (Preference)';
-      case 'qa_no5':
-        return 'No. 5 受験者自身への質問2 (Yes/No Q)';
-      case 'exam_finish':
-        return 'カード返却・退室 (Exit)';
-      case 'final_report':
-        return '総合判定レポート (Final Report)';
-    }
-  };
-
-  // Reset interview session
-  const handleResetSession = () => {
-    setCurrentStep('welcome_entrance');
+  const resetLive = () => {
+    setPhase('idle');
+    setLine(null);
+    setSpeaking(false);
+    setListening(false);
+    setInterim('');
+    setSilence(0);
+    setCardState('none');
+    setTimer(null);
     setRecords([]);
-    setCurrentFeedback(null);
-    setFinalReport(null);
-    setIsCardFlipped(false);
-    setSilentTimer(20);
-    setIsTimerRunning(false);
-    setRightPaneTab('card');
+    setPending(null);
+    setReport(null);
+    setAiPending(false);
   };
 
-  // Suggested phrases based on step
-  const getSuggestedPhrasesForStep = (): string[] => {
-    switch (currentStep) {
-      case 'welcome_entrance':
-        return ['May I come in?', 'Here you are.', 'Thank you.'];
-      case 'interview_warmup':
-        return ["My name is Hanako Sato.", "I'm fine, thank you.", "I'm a little nervous, but ready!"];
-      case 'card_receive':
-        return ['Thank you.', 'All right.'];
-      case 'aloud_reading':
-        return [selectedCard.passageTitle];
-      case 'qa_no1':
-        return selectedCard.question1.modelAnswers.slice(0, 1);
-      case 'qa_no2':
-        return selectedCard.pictureA.modelAnswers.slice(0, 1);
-      case 'qa_no3':
-        return selectedCard.pictureB.modelAnswers.slice(0, 1);
-      case 'card_turnover':
-        return ['I have turned it over.'];
-      case 'qa_no4':
-        return ['I like...', 'Because it is interesting.'];
-      case 'qa_no5':
-        return ['Yes. I usually...', 'No. But I like to...'];
-      case 'exam_finish':
-        return ['Here is the card.', 'Thank you very much. Goodbye!'];
-      default:
-        return [];
+  const stopInterview = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    stopSpeaking();
+  };
+
+  const goHome = () => {
+    stopInterview();
+    resetLive();
+    setScreen('home');
+  };
+
+  const start = async (c: ExamCard) => {
+    unlockAudio();
+    stopInterview();
+    resetLive();
+    setCard(c);
+    setShowJa(settings.mode === 'practice');
+    setScreen('interview');
+    window.scrollTo({ top: 0 });
+
+    // マイク許可を先に取っておく（本番中にダイアログが出ないように）
+    try {
+      const s = await navigator.mediaDevices?.getUserMedia({ audio: true });
+      s?.getTracks().forEach((t) => t.stop());
+    } catch {
+      /* キーボード入力で続行 */
+    }
+
+    const ac = new AbortController();
+    abortRef.current = ac;
+    const recMap = new Map<ScoredItem, AnswerRecord>();
+    const bridge: Bridge = {
+      setPhase,
+      setLine: (text, ja) => setLine(text ? { text, ja } : null),
+      setSpeaking,
+      setListening: (a, h) => {
+        setListening(a);
+        if (h) setHint(h);
+      },
+      setInterim,
+      setSilence,
+      setCardState,
+      setTimer,
+      upsertRecord: (rec) => {
+        recMap.set(rec.item, rec);
+        setRecords(Array.from(recMap.values()));
+      },
+      showFeedback: (rec, promise) =>
+        new Promise<FeedbackAction>((resolve) => {
+          setPending({ rec, promise, resolve });
+        }).finally(() => setPending(null)),
+    };
+
+    try {
+      const result = await runInterview(c, examiner, { ...settings }, useClaude, bridge, ac.signal);
+      setPhase('scoring');
+      await result.evals;
+      if (ac.signal.aborted) return;
+      const recs = Array.from(recMap.values());
+      const scores = { reading: 0, q1: 0, q2: 0, q3: 0, q4: 0, q5: 0 } as Record<ScoredItem, number>;
+      recs.forEach((r) => (scores[r.item] = r.feedback?.score ?? 0));
+      const attitude = scoreAttitude(recs.filter((r) => r.item !== 'reading'), result.greetingAnswered, result.greetingTotal);
+      const total = Object.values(scores).reduce((a, b) => a + b, 0) + attitude;
+      const passed = total >= PASS_LINE;
+
+      const base: FinalReport = {
+        scores,
+        attitude,
+        total,
+        passed,
+        summary: '講評を作成しています…',
+        strengths: [],
+        improvements: [],
+        nextSteps: '',
+        source: 'local',
+      };
+      setReport(base);
+      setRecords(recs);
+      setPhase('report');
+      setScreen('report');
+      playSfx(passed ? 'fanfare' : 'chime');
+
+      const h: HistoryRecord = {
+        id: String(Date.now()),
+        date: new Date().toLocaleString('ja-JP'),
+        cardId: c.id,
+        cardTitle: c.title,
+        mode: settings.mode,
+        total,
+        passed,
+      };
+      setHistory((prev) => {
+        const next = [h, ...prev];
+        saveHistory(next);
+        return next;
+      });
+
+      setAiPending(useClaude);
+      const text = await generateReport(c, recs, scores, attitude, total, PASS_LINE, settings, useClaude);
+      if (ac.signal.aborted) return;
+      setReport({ ...base, ...text });
+      setAiPending(false);
+    } catch (e) {
+      if (!(e instanceof AbortedError)) console.error(e);
     }
   };
+
+  const nextCard = () => {
+    const i = EXAM_CARDS.findIndex((c) => c.id === card.id);
+    start(EXAM_CARDS[(i + 1) % EXAM_CARDS.length]);
+  };
+
+  const phaseIdx = PHASE_ORDER.indexOf(phase);
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-900 flex flex-col font-sans lg:h-screen lg:overflow-hidden">
-      {/* Top Global Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs shrink-0">
-        <div className="max-w-7xl mx-auto px-3 sm:px-5 h-13 sm:h-14 flex items-center justify-between gap-2 sm:gap-4">
-          {/* Logo & App Title */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white font-black text-sm sm:text-base shadow-xs shrink-0">
-              3級
+    <div className="flex min-h-screen flex-col bg-slate-100 text-slate-900">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
+          <button onClick={goHome} className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-black text-white">3級</div>
+            <div className="text-left">
+              <div className="text-sm font-black leading-tight sm:text-base">英検3級 面接シミュレーター</div>
+              <div className="hidden text-[10px] text-slate-500 sm:block">2次試験（スピーキング）本番形式トレーニング</div>
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-sm sm:text-base font-black tracking-tight text-slate-900">
-                  英検3級 2次試験 面接シミュレーター
-                </h1>
-                <span className="hidden md:inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
-                  AI Realtime Prep
-                </span>
-              </div>
-              <p className="hidden sm:block text-[11px] text-slate-500 font-medium">
-                面接官アバター × リアルタイム音声認識 × 即時AIフィードバック
-              </p>
-            </div>
-          </div>
-
-          {/* Navigation Controls */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Guide Button */}
-            <button
-              onClick={() => setIsGuideOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors cursor-pointer"
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">合格虎の巻</span>
-              <span className="sm:hidden">ガイド</span>
-            </button>
-
-            {/* Card & Mode Selector Button */}
-            <button
-              onClick={() => setIsCardSelectorOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors cursor-pointer"
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">カード変更 ({selectedCard.title.split(' ')[0]})</span>
-              <span className="sm:hidden">カード</span>
-            </button>
-
-            {/* Audio Voice Toggle */}
-            <button
-              onClick={() => setIsMuted(!isMuted)}
-              title={isMuted ? '面接官の音声をオンにする' : 'ミュートにする'}
-              className={`p-1.5 sm:p-2 rounded-xl text-xs transition-colors cursor-pointer ${
-                isMuted
-                  ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <span
+              className={`hidden items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold sm:inline-flex ${
+                useClaude ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
               }`}
             >
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              <Sparkles className="h-3 w-3" /> {useClaude ? 'Claude 採点 ON' : '簡易採点'}
+            </span>
+            <button onClick={() => setShowGuide(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
+              <BookOpen className="h-4 w-4" /> <span className="hidden sm:inline">攻略ガイド</span>
             </button>
-
-            {/* Fullscreen Button */}
-            <button
-              onClick={toggleFullscreen}
-              title={isFullscreen ? '全画面表示を解除 (Exit Fullscreen)' : '全画面表示 (Fullscreen)'}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors cursor-pointer"
-            >
-              {isFullscreen ? (
-                <>
-                  <Minimize className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">全画面解除</span>
-                </>
-              ) : (
-                <>
-                  <Maximize className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">全画面</span>
-                </>
-              )}
+            <button onClick={() => setShowSettings(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">
+              <Settings className="h-4 w-4" /> <span className="hidden sm:inline">設定</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 lg:p-3 flex flex-col overflow-y-auto lg:overflow-hidden">
-        {currentStep === 'final_report' && finalReport ? (
-          /* FINAL COMPREHENSIVE REPORT VIEW */
-          <div className="overflow-y-auto max-h-full pr-1">
-            <FinalReportModal
-              card={selectedCard}
-              report={finalReport}
-              records={records}
-              onRetryCard={handleResetSession}
-              onSelectNextCard={() => {
-                const currentIndex = EXAM_CARDS.findIndex((c) => c.id === selectedCard.id);
-                const nextCard = EXAM_CARDS[(currentIndex + 1) % EXAM_CARDS.length];
-                setSelectedCard(nextCard);
-                handleResetSession();
-              }}
-              onOpenDrillMode={() => {
-                setMode('drill');
-                setIsCardSelectorOpen(true);
-              }}
-            />
-          </div>
-        ) : (
-          /* ACTIVE INTERVIEW SIMULATION VIEW */
-          <div className="flex flex-col gap-2 flex-1 lg:overflow-hidden">
-            {/* Step Progress Breadcrumb */}
-            <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-2xs border border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-900 text-white">
-                  Step
-                </span>
-                <span className="text-xs sm:text-sm font-black text-slate-900">
-                  {getStepDisplayName(currentStep)}
-                </span>
-              </div>
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col p-3 sm:p-5">
+        {screen === 'home' && <HomeScreen cards={EXAM_CARDS} settings={settings} history={history} onSettings={setSettings} onStart={start} />}
 
-              {/* Progress Dots / Steps */}
-              <div className="flex items-center gap-1 text-xs overflow-x-auto py-0.5">
-                {[
-                  { id: 'welcome_entrance', label: '挨拶' },
-                  { id: 'card_receive', label: 'カード' },
-                  { id: 'aloud_reading', label: '音読' },
-                  { id: 'qa_no1', label: 'No.1' },
-                  { id: 'qa_no2', label: 'No.2' },
-                  { id: 'qa_no3', label: 'No.3' },
-                  { id: 'qa_no4', label: 'No.4' },
-                  { id: 'qa_no5', label: 'No.5' },
-                  { id: 'exam_finish', label: '終了' },
-                ].map((s) => {
-                  const isCurrent = currentStep.includes(s.id);
-                  const isDone = records.some((r) => r.stepId === s.id);
+        {screen === 'report' && (
+          <ReportView
+            card={card}
+            records={records}
+            report={report}
+            aiPending={aiPending}
+            onSpeak={speakModel}
+            onRetry={() => start(card)}
+            onNext={nextCard}
+            onHome={goHome}
+          />
+        )}
 
+        {screen === 'interview' && (
+          <div className="flex flex-1 flex-col gap-3">
+            {/* progress */}
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+              <span className={`rounded-md px-2 py-0.5 text-[10px] font-black ${settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
+                {settings.mode === 'exam' ? '本番' : '練習'}
+              </span>
+              <div className="flex flex-1 items-center gap-1 overflow-x-auto">
+                {STEPS.map((s, i) => {
+                  const firstIdx = PHASE_ORDER.indexOf(s.id[0]);
+                  const lastIdx = PHASE_ORDER.indexOf(s.id[s.id.length - 1]);
+                  const active = phaseIdx >= firstIdx && phaseIdx <= lastIdx;
+                  const done = phaseIdx > lastIdx;
                   return (
-                    <span
-                      key={s.id}
-                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                        isCurrent
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : isDone
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-slate-100 text-slate-400'
-                      }`}
-                    >
-                      {s.label}
-                    </span>
+                    <React.Fragment key={s.label}>
+                      {i > 0 && <div className={`h-0.5 w-2 shrink-0 sm:w-4 ${done || active ? 'bg-indigo-400' : 'bg-slate-200'}`} />}
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                          active ? 'bg-indigo-600 text-white shadow' : done ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
+                        }`}
+                      >
+                        {s.label}
+                      </span>
+                    </React.Fragment>
                   );
                 })}
               </div>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handleResetSession}
-                  className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                  title="最初からやり直す"
-                >
-                  <RotateCcw className="w-3 h-3" /> 最初から
-                </button>
-              </div>
+              <button
+                onClick={goHome}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50"
+              >
+                <Square className="h-3 w-3" /> 中断
+              </button>
             </div>
 
-            {/* Split Screen Layout: Left Examiner & Speech / Right Problem Card */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 lg:gap-3 items-start flex-1 lg:overflow-hidden">
-              {/* Left Column: Examiner Avatar & Speech Recognition (5 cols) */}
-              <div className="lg:col-span-5 space-y-2 flex flex-col shrink-0">
-                <ExaminerAvatar
-                  examiner={selectedExaminer}
-                  isSpeaking={isSpeaking}
-                  isListening={isUserListening}
-                  currentSpeechText={currentSpeechText}
-                  onReplaySpeech={handleReplaySpeech}
-                  onPardonRequested={handlePardon}
-                  pardonCount={pardonCount}
-                />
-
-                {/* Speech Input & Real-time Transcript */}
-                <SpeechInputPanel
-                  key={currentStep}
-                  stepId={currentStep}
-                  onAnswerSubmit={handleAnswerSubmit}
-                  isEvaluating={isEvaluating}
-                  onListeningChange={setIsUserListening}
-                  suggestedPhrases={mode === 'practice' ? getSuggestedPhrasesForStep() : []}
-                  placeholder="マイクボタンを押して英語で発話してください..."
-                />
-
-                {/* Quick Skip or Next Step Button */}
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[11px] text-slate-400">
-                    発話後に「送信して即座に判定」を押すとAI分析が行われます
-                  </span>
-                  <button
-                    onClick={handleNextStep}
-                    className="inline-flex items-center gap-0.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
-                  >
-                    <span>スキップして次へ</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+            <div className="grid flex-1 gap-3 lg:grid-cols-12">
+              {/* examiner side */}
+              <div className="flex flex-col gap-3 lg:col-span-5">
+                <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-200 to-slate-100 shadow-sm">
+                  <div className="absolute left-3 top-3 z-10 flex items-center gap-1">
+                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold text-slate-700">{examiner.name}</span>
+                  </div>
+                  <div className="absolute right-3 top-3 z-10 flex gap-1">
+                    <IconToggle on={showSubs} onClick={() => setShowSubs((v) => !v)} title="英語字幕">
+                      <Subtitles className="h-3.5 w-3.5" />
+                    </IconToggle>
+                    <IconToggle on={showJa} onClick={() => setShowJa((v) => !v)} title="和訳">
+                      <Languages className="h-3.5 w-3.5" />
+                    </IconToggle>
+                    <IconToggle on={!muted} onClick={() => setMuted((v) => !v)} title="解説の読み上げ音声">
+                      {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                    </IconToggle>
+                  </div>
+                  <div className="mx-auto h-48 w-48 pt-4 sm:h-56 sm:w-56">
+                    <ExaminerFigure examiner={examiner} speaking={speaking} listening={listening} />
+                  </div>
+                  <div className="min-h-[5.5rem] border-t border-slate-200 bg-white/90 px-4 py-3">
+                    {line ? (
+                      <>
+                        {showSubs ? (
+                          <div className={`text-base font-semibold leading-snug sm:text-lg ${speaking ? 'text-slate-900' : 'text-slate-600'}`}>“{line.text}”</div>
+                        ) : (
+                          <div className="text-sm text-slate-400">（字幕オフ：耳で聞き取りましょう）</div>
+                        )}
+                        {showJa && line.ja && <div className="mt-1 text-xs text-slate-500">{line.ja}</div>}
+                      </>
+                    ) : (
+                      <div className="text-sm text-slate-400">{phase === 'scoring' ? '採点しています…' : 'まもなく面接が始まります'}</div>
+                    )}
+                  </div>
                 </div>
+                <MicBar
+                  speaking={speaking}
+                  listening={listening}
+                  hint={hint}
+                  interim={interim}
+                  silence={silence}
+                  busyLabel={phase === 'silent_reading' ? '黙読中（声に出さずに読みましょう）' : phase === 'scoring' ? '採点中…' : pending ? '解説を確認しましょう' : undefined}
+                />
               </div>
 
-              {/* Right Column: Problem Card & Instant Feedback (7 cols) with Tab Switch */}
-              <div className="lg:col-span-7 flex flex-col gap-2 lg:overflow-y-auto lg:max-h-[calc(100vh-125px)] pr-1">
-                {currentFeedback && (
-                  <div className="flex items-center justify-between bg-white rounded-xl p-1 border border-slate-200 shadow-2xs shrink-0">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setRightPaneTab('feedback')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          rightPaneTab === 'feedback'
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>AI判定 & 模範解答</span>
-                      </button>
-                      <button
-                        onClick={() => setRightPaneTab('card')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          rightPaneTab === 'card'
-                            ? 'bg-slate-800 text-white shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>問題カード確認</span>
-                      </button>
-                    </div>
-                    <span className="text-[10px] text-slate-400 mr-2 hidden sm:inline font-medium">
-                      タブでカードと解説を切替
-                    </span>
-                  </div>
-                )}
-
-                {currentFeedback && rightPaneTab === 'feedback' ? (
-                  /* Instant Feedback Card with Native English Pronunciation */
-                  <InstantFeedbackCard
-                    feedback={currentFeedback}
-                    userAnswer={lastUserAnswer}
-                    onNextStep={handleNextStep}
-                    onRetry={() => {
-                      setCurrentFeedback(null);
-                      setRightPaneTab('card');
+              {/* card / feedback side */}
+              <div className="min-h-[420px] lg:col-span-7">
+                {pending ? (
+                  <FeedbackPanel
+                    key={pending.rec.item + pending.rec.answer}
+                    card={card}
+                    rec={pending.rec}
+                    evalPromise={pending.promise}
+                    autoAdvance={settings.autoAdvance}
+                    readModelAnswer={settings.readModelAnswer && !muted}
+                    onSpeak={speakModel}
+                    onAction={(a) => {
+                      stopSpeaking();
+                      pending.resolve(a);
                     }}
-                    isLastQuestion={currentStep === 'qa_no5' || currentStep === 'exam_finish'}
-                    onSpeakAnswer={speakText}
                   />
                 ) : (
-                  /* The Physical Eiken Grade 3 Question Card */
-                  <>
-                    <ProblemCardView
-                      card={selectedCard}
-                      currentStep={currentStep}
-                      isFlipped={isCardFlipped}
-                      onFlipCard={() => setIsCardFlipped(!isCardFlipped)}
-                      silentTimerSeconds={silentTimer}
-                    />
-
-                    {/* Practice Mode In-depth Hints when enabled */}
-                    {mode === 'practice' && (
-                      <div className="bg-emerald-50 rounded-xl p-2.5 border border-emerald-200/80 text-xs text-emerald-950">
-                        <div className="flex items-center gap-1 font-bold text-emerald-900 mb-0.5">
-                          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>練習モード・合格ヒント:</span>
-                        </div>
-                        {currentStep === 'qa_no1' && (
-                          <p>{selectedCard.question1.hint}</p>
-                        )}
-                        {currentStep === 'qa_no2' && (
-                          <p>{selectedCard.pictureA.hint}</p>
-                        )}
-                        {currentStep === 'qa_no3' && (
-                          <p>{selectedCard.pictureB.hint}</p>
-                        )}
-                        {currentStep === 'qa_no4' && (
-                          <p>{selectedCard.question4.hint}</p>
-                        )}
-                        {currentStep === 'qa_no5' && (
-                          <p>{selectedCard.question5.hint}</p>
-                        )}
-                        {currentStep === 'aloud_reading' && (
-                          <p>タイトル「{selectedCard.passageTitle}」を忘れずに読み始めましょう。ピリオドでしっかり息継ぎをすると自然に聞こえます。</p>
-                        )}
-                      </div>
-                    )}
-                  </>
+                  <ExamCardView card={card} state={cardState} timer={timer} showTranslation={showJa && settings.mode === 'practice'} />
                 )}
               </div>
             </div>
@@ -766,31 +364,18 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto bg-white border-t border-slate-200 py-1 text-center text-[10px] text-slate-400 shrink-0">
-        英検3級 2次試験 面接シミュレーター | Powered by Gemini 3.8 Flash & Web Speech API
-      </footer>
-
-      {/* Modals */}
-      <StrategyGuideModal
-        isOpen={isGuideOpen}
-        onClose={() => setIsGuideOpen(false)}
-      />
-
-      <CardSelectorModal
-        isOpen={isCardSelectorOpen}
-        onClose={() => setIsCardSelectorOpen(false)}
-        selectedCardId={selectedCard.id}
-        onSelectCard={(card) => {
-          setSelectedCard(card);
-          handleResetSession();
-        }}
-        selectedExaminerId={selectedExaminer.id}
-        onSelectExaminer={(examiner) => setSelectedExaminer(examiner)}
-        mode={mode}
-        onSelectMode={(newMode) => setMode(newMode)}
-        history={history}
-      />
+      <SettingsModal open={showSettings} settings={settings} status={status} onChange={setSettings} onClose={() => setShowSettings(false)} />
+      <StrategyGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </div>
   );
 }
+
+const IconToggle: React.FC<{ on: boolean; onClick: () => void; title: string; children: React.ReactNode }> = ({ on, onClick, title, children }) => (
+  <button
+    onClick={onClick}
+    title={title}
+    className={`rounded-full p-1.5 transition ${on ? 'bg-indigo-600 text-white' : 'bg-white/80 text-slate-500 hover:bg-white'}`}
+  >
+    {children}
+  </button>
+);

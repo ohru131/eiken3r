@@ -1,142 +1,159 @@
-export type SimulationStepId =
-  | 'welcome_entrance'    // 入室・挨拶
-  | 'interview_warmup'    // 氏名・受験番号確認・ウォームアップ
-  | 'card_receive'        // 問題カード受け渡し
-  | 'silent_reading'      // 黙読20秒
-  | 'aloud_reading'       // 音読
-  | 'qa_no1'              // No. 1 パッセージ質問
-  | 'qa_no2'              // No. 2 イラストA質問 (動作・be + -ing)
-  | 'qa_no3'              // No. 3 イラストB質問 (位置・数)
-  | 'card_turnover'       // カードを裏返す指示
-  | 'qa_no4'              // No. 4 受験者自身への質問1 (日常・好み)
-  | 'qa_no5'              // No. 5 受験者自身への質問2 (Yes/No + 展開)
-  | 'exam_finish'         // カード返却・退室挨拶
-  | 'final_report';       // 総合結果・AIレポート
+// ===== 問題カード =====
 
-export type InterviewMode = 'exam' | 'practice' | 'drill';
+export type SceneBackground =
+  | 'park'
+  | 'kitchen'
+  | 'classroom'
+  | 'library'
+  | 'street'
+  | 'station'
+  | 'beach'
+  | 'livingroom'
+  | 'shop'
+  | 'schoolyard'
+  | 'garden'
+  | 'mountain'
+  | 'restaurant'
+  | 'gym'
+  | 'zoo'
+  | 'hospital';
 
-export interface ExaminerProfile {
-  id: 'alex' | 'sarah' | 'david';
-  name: string;
-  role: string;
-  accent: string;
+/** イラスト内の人物・物。座標は 0-100 (%) */
+export interface SceneItem {
+  emoji: string;
+  x: number;
+  y: number;
+  /** 表示サイズ (rem)。既定 3 */
+  size?: number;
+  /** 左右反転 */
+  flip?: boolean;
+  /** 人物の上に出す小さなラベル (例: "A") — 通常は不要 */
+  label?: string;
+  /** 吹き出し（これからすること＝ be going to 用）に入れる絵文字 */
+  thought?: string;
+}
+
+export interface Scene {
+  background: SceneBackground;
+  items: SceneItem[];
+  /** イラストの英語説明（AI採点用。画面には出さない） */
   description: string;
-  avatarColor: string;
-  speechVoiceNameHint: string[];
 }
 
 export interface VocabularyHelp {
   word: string;
   meaning: string;
-  pronunciation?: string;
+}
+
+export interface CardQuestion {
+  /** 面接官が読む英語の質問 */
+  text: string;
+  /** 和訳 */
+  ja: string;
+  /** 模範解答（最初が最も標準的な解答） */
+  modelAnswers: string[];
+  /** 解説（なぜその答えになるか・本文/イラストのどこを見るか） */
+  explanation: string;
+  /** 文法・表現ポイント（短く） */
+  point: string;
+  /** よくある誤答と減点理由 */
+  commonMistakes?: string[];
+}
+
+export interface Question5 extends CardQuestion {
+  /** Yes と答えた時の追加質問 (例: "Please tell me more.") */
+  followUpYes: string;
+  /** No と答えた時の追加質問 (例: "Why not?" / "What do you want to do ...?") */
+  followUpNo: string;
+  modelAnswersYes: string[];
+  modelAnswersNo: string[];
 }
 
 export interface ExamCard {
   id: string;
-  title: string;
+  title: string; // パッセージのタイトル（英語）
   japaneseTitle: string;
   category: string;
-  badgeColor: string;
-  passageTitle: string;
-  passageText: string;
-  passageJapanese: string;
-  passageVocabulary: VocabularyHelp[];
-  
-  // No. 1: Question about the passage
-  question1: {
-    questionText: string;
-    japaneseTranslation: string;
-    hint: string;
-    modelAnswers: string[];
-    grammarKey: string;
-  };
-
-  // No. 2: Picture A (actions)
-  pictureA: {
-    title: string;
-    svgScene: 'park_cycling' | 'kitchen_cooking' | 'library_studying' | 'recycle_cleaning' | 'travel_station' | 'tablet_classroom';
-    questionText: string;
-    japaneseTranslation: string;
-    hint: string;
-    targetAction: string;
-    modelAnswers: string[];
-    grammarKey: string;
-  };
-
-  // No. 3: Picture B (locations, counts, descriptions)
-  pictureB: {
-    title: string;
-    svgScene: 'park_bench_cats' | 'kitchen_table_apples' | 'library_shelf_books' | 'recycle_bins' | 'travel_bags' | 'classroom_computers';
-    questionText: string;
-    japaneseTranslation: string;
-    hint: string;
-    targetFocus: string;
-    modelAnswers: string[];
-    grammarKey: string;
-  };
-
-  // No. 4: Personal question 1
-  question4: {
-    questionText: string;
-    japaneseTranslation: string;
-    hint: string;
-    modelAnswers: string[];
-    tips: string;
-  };
-
-  // No. 5: Personal question 2
-  question5: {
-    questionText: string;
-    japaneseTranslation: string;
-    followUpYes: string;
-    followUpNo: string;
-    hint: string;
-    modelAnswers: string[];
-    tips: string;
-  };
+  level: 'basic' | 'standard' | 'challenge';
+  passage: string; // 30〜40語程度の英文
+  passageJa: string;
+  vocabulary: VocabularyHelp[];
+  scene: Scene;
+  q1: CardQuestion; // パッセージについて
+  q2: CardQuestion; // イラストについて
+  q3: CardQuestion; // イラストについて
+  q4: CardQuestion; // 受験者自身について（カード裏返し後）
+  q5: Question5; // 受験者自身について (Yes/No + 追加質問)
 }
+
+// ===== 面接官 =====
+
+export interface ExaminerProfile {
+  id: string;
+  name: string;
+  shortName: string;
+  description: string;
+  color: string; // tailwind gradient
+  voiceHints: string[];
+  pitch: number;
+  rate: number;
+}
+
+// ===== シミュレーション =====
+
+export type InterviewMode = 'exam' | 'practice';
+
+export type PhaseId =
+  | 'idle'
+  | 'entrance'
+  | 'greeting'
+  | 'silent_reading'
+  | 'reading_aloud'
+  | 'q1'
+  | 'q2'
+  | 'q3'
+  | 'turnover'
+  | 'q4'
+  | 'q5'
+  | 'exit'
+  | 'scoring'
+  | 'report';
+
+export type ScoredItem = 'reading' | 'q1' | 'q2' | 'q3' | 'q4' | 'q5';
 
 export interface StepFeedback {
-  score: number;
-  ratingLabel: string;
-  analyzedSpokenText?: string;
-  quickFeedback: string;
-  grammarCheck: string;
-  betterResponses: string[];
-  keyTips: string;
+  score: number; // 0-5 (reading also 0-5)
+  verdict: string; // 短い評価ラベル
+  goodPoints: string;
+  corrections: string;
+  improvedAnswer: string;
+  tip: string;
+  source: 'claude' | 'local';
 }
 
-export interface QuestionRecord {
-  stepId: SimulationStepId;
-  stepTitle: string;
-  examinerPrompt: string;
-  userSpokenText: string;
+export interface AnswerRecord {
+  item: ScoredItem;
+  question: string;
+  answer: string;
+  /** No.5 の追加質問と回答 */
+  followUpQuestion?: string;
+  followUpAnswer?: string;
+  /** 質問終了〜発話開始までの秒数 */
+  latencySec: number | null;
+  pardonUsed: boolean;
   feedback?: StepFeedback;
-  audioDurationSec?: number;
-  score?: number;
 }
 
-export interface FinalReportData {
-  readingScore: number;
-  no1Score: number;
-  no2Score: number;
-  no3Score: number;
-  no4Score: number;
-  no5Score: number;
-  attitudeScore: number;
-  totalScore: number;
+export interface FinalReport {
+  scores: Record<ScoredItem, number>;
+  attitude: number;
+  total: number;
   passed: boolean;
-  gradeLabel: string;
-  overallSummary: string;
+  summary: string;
   strengths: string[];
   improvements: string[];
-  questionReviews: {
-    questionTitle: string;
-    score: number;
-    comment: string;
-    modelAnswer: string;
-  }[];
-  stepUpAdvice: string;
+  nextSteps: string;
+  source: 'claude' | 'local';
 }
 
 export interface HistoryRecord {
@@ -145,7 +162,20 @@ export interface HistoryRecord {
   cardId: string;
   cardTitle: string;
   mode: InterviewMode;
-  totalScore: number;
+  total: number;
   passed: boolean;
-  gradeLabel: string;
+}
+
+export interface AppSettings {
+  apiKey: string;
+  model: string;
+  mode: InterviewMode;
+  examinerId: string;
+  speechRate: number; // 0.7 - 1.2
+  sfx: boolean;
+  autoAdvance: boolean;
+  /** 回答終了とみなす無音秒数 */
+  silenceSec: number;
+  /** 練習モードで模範解答を読み上げる */
+  readModelAnswer: boolean;
 }
