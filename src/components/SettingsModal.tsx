@@ -3,6 +3,7 @@ import { X, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-reac
 import { AppSettings } from '../types';
 import { MODEL_OPTIONS } from '../lib/settings';
 import { ServerStatus } from '../lib/api';
+import { testConnection } from '../lib/claude';
 
 interface Props {
   open: boolean;
@@ -14,6 +15,12 @@ interface Props {
 
 export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChange, onClose }) => {
   const [show, setShow] = useState(false);
+  const [test, setTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'ng'; msg?: string }>({ state: 'idle' });
+  const runTest = async () => {
+    setTest({ state: 'testing' });
+    const err = await testConnection(settings.apiKey, settings.model);
+    setTest(err ? { state: 'ng', msg: err } : { state: 'ok' });
+  };
   if (!open) return null;
   const set = <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => onChange({ ...settings, [k]: v });
   const keyOk = !!settings.apiKey || status.serverKey;
@@ -37,7 +44,10 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
               <input
                 type={show ? 'text' : 'password'}
                 value={settings.apiKey}
-                onChange={(e) => set('apiKey', e.target.value.trim())}
+                onChange={(e) => {
+                  set('apiKey', e.target.value.trim());
+                  setTest({ state: 'idle' });
+                }}
                 placeholder={status.serverKey ? 'サーバーのキーを使用中（入力すると上書き）' : 'sk-ant-...'}
                 className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs outline-none focus:border-indigo-500"
               />
@@ -47,10 +57,36 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
             </div>
             <div className={`mt-1.5 flex items-center gap-1 text-xs ${keyOk ? 'text-emerald-700' : 'text-amber-700'}`}>
               {keyOk ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-              {keyOk ? 'Claude による詳細なAI採点が有効です' : '未設定：簡易採点（ローカル判定）で動作します'}
+              {keyOk ? (settings.apiKey ? 'キー設定済み：Claude でAI採点します（「接続テスト」で確認できます）' : 'サーバーのキーで Claude 採点します') : '未設定：簡易採点（ローカル判定）で動作します'}
             </div>
-            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-              キーはこのブラウザ（localStorage）にだけ保存され、採点時にこのアプリのサーバー経由で Anthropic API に送られます。サーバー側で環境変数 ANTHROPIC_API_KEY を設定しても使えます。
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                onClick={runTest}
+                disabled={!settings.apiKey || test.state === 'testing'}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+              >
+                {test.state === 'testing' ? '確認中…' : '接続テスト'}
+              </button>
+              {settings.apiKey && (
+                <button
+                  onClick={() => {
+                    set('apiKey', '');
+                    setTest({ state: 'idle' });
+                  }}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600"
+                >
+                  キーを削除
+                </button>
+              )}
+              {test.state === 'ok' && <span className="text-xs font-bold text-emerald-700">接続OK</span>}
+              {test.state === 'ng' && <span className="text-xs font-bold text-rose-600">{test.msg}</span>}
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+              キーはこの端末のブラウザ（localStorage）にだけ保存され、採点時にブラウザから直接 Anthropic API へ送信されます。共用PCでは使用後に「キーを削除」してください。キーは{' '}
+              <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-indigo-600 underline">
+                Anthropic Console
+              </a>{' '}
+              で発行できます。
             </p>
             <label className="mt-3 block text-xs font-bold text-slate-700">採点モデル</label>
             <select value={settings.model} onChange={(e) => set('model', e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">

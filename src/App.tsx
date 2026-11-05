@@ -243,6 +243,15 @@ export default function App() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col p-3 sm:p-5">
+        {screen === 'home' && !useClaude && (
+          <div className="mx-auto mb-4 flex w-full max-w-6xl flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span className="flex-1">Claude APIキーを設定すると、あなたの発話に合わせた詳しいAI採点・講評になります（未設定でも簡易採点で練習可能）。</span>
+            <button onClick={() => setShowSettings(true)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700">
+              APIキーを設定
+            </button>
+          </div>
+        )}
         {screen === 'home' && <HomeScreen cards={EXAM_CARDS} settings={settings} history={history} onSettings={setSettings} onStart={start} />}
 
         {screen === 'report' && (

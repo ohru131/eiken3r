@@ -17,14 +17,18 @@
 
 ## AI 採点（Claude API）
 
-採点・講評に Anthropic の Claude API を使用。キーは次のどちらかで設定。
+採点・講評に Anthropic の Claude API を使用。
 
-1. アプリ右上の「設定」で API キーを入力（ブラウザの localStorage に保存）
-2. サーバーの環境変数 `ANTHROPIC_API_KEY`（`.env.example` 参照）
+1. アプリ右上の「設定」で API キーを入力 → 「接続テスト」で確認。キーはブラウザの localStorage にだけ保存され、ブラウザから直接 Anthropic API を呼ぶ（GitHub Pages 版はこの方式）
+2. ローカル開発時はサーバーの環境変数 `ANTHROPIC_API_KEY`（`.env.example` 参照）でも可
 
 採点モデルは設定画面で Opus 5.5（標準）/ Sonnet 5.5 / Haiku 5.5 から選択。キー未設定時はローカルの簡易採点で動作。
 
-## 起動
+## GitHub Pages で公開
+
+`.github/workflows/pages.yml` が `main` への push で自動ビルド・デプロイする。初回のみリポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定。公開URL: `https://<ユーザー名>.github.io/eiken3r/`
+
+## ローカル起動
 
 ```bash
 bun install   # または npm install

@@ -1,5 +1,6 @@
 import { AnswerRecord, AppSettings, ExamCard, FinalReport, ScoredItem, StepFeedback } from '../types';
 import { ITEM_LABELS, getQuestion, localEvaluate } from './scoring';
+import { createClient, describeError, evaluateWithClaude, reportWithClaude } from './claude';
 
 export interface ServerStatus {
   serverKey: boolean;
@@ -8,7 +9,7 @@ export interface ServerStatus {
 
 export async function fetchStatus(): Promise<ServerStatus> {
   try {
-    const r = await fetch('/api/status');
+    const r = await fetch('api/status');
     if (!r.ok) throw new Error();
     return await r.json();
   } catch {
@@ -16,10 +17,21 @@ export async function fetchStatus(): Promise<ServerStatus> {
   }
 }
 
-function headers(s: AppSettings): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json', 'x-claude-model': s.model };
-  if (s.apiKey) h['x-anthropic-key'] = s.apiKey;
-  return h;
+const headers = (s: AppSettings): Record<string, string> => ({ 'Content-Type': 'application/json', 'x-claude-model': s.model });
+
+/** ブラウザにキーがあれば Claude API を直接呼ぶ。無ければ（ローカル開発時の）サーバーへ */
+async function callClaude<T>(s: AppSettings, path: string, body: any, direct: (c: ReturnType<typeof createClient>) => Promise<T>): Promise<T> {
+  if (s.apiKey) {
+    try {
+      return await direct(createClient(s.apiKey, true));
+    } catch (e) {
+      throw new Error(describeError(e).message);
+    }
+  }
+  const r = await fetch(path, { method: 'POST', headers: headers(s), body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data as T;
 }
 
 export const canUseClaude = (s: AppSettings, status: ServerStatus) => !!s.apiKey || status.serverKey;
@@ -48,10 +60,7 @@ export async function evaluateAnswer(
     pardonUsed: rec.pardonUsed,
   };
   try {
-    const r = await fetch('/api/evaluate', { method: 'POST', headers: headers(settings), body: JSON.stringify(body) });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-    return data as StepFeedback;
+    return await callClaude<StepFeedback>(settings, 'api/evaluate', body, (c) => evaluateWithClaude(c, settings.model, body));
   } catch (e: any) {
     return { ...localEvaluate(card, rec), error: e?.message || 'network' };
   }
@@ -70,10 +79,7 @@ export async function generateReport(
   const local = () => localReport(records, scores);
   if (!useClaude) return local();
   try {
-    const r = await fetch('/api/report', {
-      method: 'POST',
-      headers: headers(settings),
-      body: JSON.stringify({
+    const body = {
         cardTitle: card.title,
         scores,
         attitude,
@@ -87,11 +93,8 @@ export async function generateReport(
           score: x.feedback?.score,
           latencySec: x.latencySec,
         })),
-      }),
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error);
-    return data;
+    };
+    return await callClaude(settings, 'api/report', body, (c) => reportWithClaude(c, settings.model, body));
   } catch {
     return local();
   }
