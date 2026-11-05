@@ -17,10 +17,10 @@ export async function fetchStatus(): Promise<ServerStatus> {
   }
 }
 
-const headers = (s: AppSettings): Record<string, string> => ({ 'Content-Type': 'application/json', 'x-claude-model': s.model });
+const headers = (model: string): Record<string, string> => ({ 'Content-Type': 'application/json', 'x-claude-model': model });
 
 /** ブラウザにキーがあれば Claude API を直接呼ぶ。無ければ（ローカル開発時の）サーバーへ */
-async function callClaude<T>(s: AppSettings, path: string, body: any, direct: (c: ReturnType<typeof createClient>) => Promise<T>): Promise<T> {
+async function callClaude<T>(s: AppSettings, model: string, path: string, body: any, direct: (c: ReturnType<typeof createClient>) => Promise<T>): Promise<T> {
   if (s.apiKey) {
     try {
       return await direct(createClient(s.apiKey, true));
@@ -28,7 +28,7 @@ async function callClaude<T>(s: AppSettings, path: string, body: any, direct: (c
       throw new Error(describeError(e).message);
     }
   }
-  const r = await fetch(path, { method: 'POST', headers: headers(s), body: JSON.stringify(body) });
+  const r = await fetch(path, { method: 'POST', headers: headers(model), body: JSON.stringify(body) });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
   return data as T;
@@ -60,7 +60,7 @@ export async function evaluateAnswer(
     pardonUsed: rec.pardonUsed,
   };
   try {
-    return await callClaude<StepFeedback>(settings, 'api/evaluate', body, (c) => evaluateWithClaude(c, settings.model, body));
+    return await callClaude<StepFeedback>(settings, settings.evalModel, 'api/evaluate', body, (c) => evaluateWithClaude(c, settings.evalModel, body));
   } catch (e: any) {
     return { ...localEvaluate(card, rec), error: e?.message || 'network' };
   }
@@ -94,7 +94,7 @@ export async function generateReport(
           latencySec: x.latencySec,
         })),
     };
-    return await callClaude(settings, 'api/report', body, (c) => reportWithClaude(c, settings.model, body));
+    return await callClaude(settings, settings.reportModel, 'api/report', body, (c) => reportWithClaude(c, settings.reportModel, body));
   } catch {
     return local();
   }

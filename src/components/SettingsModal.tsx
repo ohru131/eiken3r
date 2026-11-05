@@ -18,7 +18,8 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
   const [test, setTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'ng'; msg?: string }>({ state: 'idle' });
   const runTest = async () => {
     setTest({ state: 'testing' });
-    const err = await testConnection(settings.apiKey, settings.model);
+    const err =
+      (await testConnection(settings.apiKey, settings.evalModel)) ?? (await testConnection(settings.apiKey, settings.reportModel));
     setTest(err ? { state: 'ng', msg: err } : { state: 'ok' });
   };
   if (!open) return null;
@@ -88,15 +89,11 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
               </a>{' '}
               で発行できます。
             </p>
-            <label className="mt-3 block text-xs font-bold text-slate-700">採点モデル</label>
-            <select value={settings.model} onChange={(e) => set('model', e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
-              {MODEL_OPTIONS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label} — {m.note}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-slate-500">本番モードは面接を止めずに裏で採点するので、待ち時間はほぼありません。</p>
+            <ModelSelect label="1問ごとの採点（標準: Haiku 5.5）" value={settings.evalModel} onChange={(v) => set('evalModel', v)} />
+            <ModelSelect label="最後の総合講評（標準: Sonnet 5.5）" value={settings.reportModel} onChange={(v) => set('reportModel', v)} />
+            <p className="mt-1 text-[11px] text-slate-500">
+              目安: 面接1回あたり 約0.02ドル（標準設定）。本番モードは面接を止めずに裏で採点するので、待ち時間はほぼありません。
+            </p>
           </section>
 
           {/* flow */}
@@ -129,6 +126,19 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
     </div>
   );
 };
+
+const ModelSelect: React.FC<{ label: string; value: string; onChange: (v: string) => void }> = ({ label, value, onChange }) => (
+  <label className="mt-3 block">
+    <span className="block text-xs font-bold text-slate-700">{label}</span>
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+      {MODEL_OPTIONS.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.label} — {m.note}
+        </option>
+      ))}
+    </select>
+  </label>
+);
 
 const Range: React.FC<{ label: string; value: number; min: number; max: number; step: number; display: string; onChange: (v: number) => void }> = (p) => (
   <label className="block">

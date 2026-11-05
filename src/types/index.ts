@@ -168,7 +168,12 @@ export interface HistoryRecord {
 
 export interface AppSettings {
   apiKey: string;
-  model: string;
+  /** 1問ごとの採点に使うモデル */
+  evalModel: string;
+  /** 総合講評に使うモデル */
+  reportModel: string;
+  /** 設定の形式バージョン（上がると既存ブラウザのモデル設定を上書き） */
+  settingsVersion: number;
   mode: InterviewMode;
   examinerId: string;
   speechRate: number; // 0.7 - 1.2
