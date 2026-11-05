@@ -1,0 +1,190 @@
+import React, { useMemo, useState } from 'react';
+import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { AppSettings, ExamCard, HistoryRecord, InterviewMode } from '../types';
+import { EXAMINERS } from '../data/examiners';
+import { PASS_LINE } from '../lib/scoring';
+
+interface Props {
+  cards: ExamCard[];
+  settings: AppSettings;
+  history: HistoryRecord[];
+  onSettings: (s: AppSettings) => void;
+  onStart: (card: ExamCard) => void;
+}
+
+const LEVEL_LABEL = { basic: '基礎', standard: '標準', challenge: '発展' } as const;
+const LEVEL_COLOR = { basic: 'bg-sky-100 text-sky-800', standard: 'bg-indigo-100 text-indigo-800', challenge: 'bg-fuchsia-100 text-fuchsia-800' } as const;
+
+export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettings, onStart }) => {
+  const [level, setLevel] = useState<'all' | ExamCard['level']>('all');
+  const best = useMemo(() => {
+    const m: Record<string, number> = {};
+    history.forEach((h) => (m[h.cardId] = Math.max(m[h.cardId] ?? 0, h.total)));
+    return m;
+  }, [history]);
+  const list = cards.filter((c) => level === 'all' || c.level === level);
+  const setMode = (mode: InterviewMode) => onSettings({ ...settings, mode });
+  const done = Object.keys(best).length;
+  const passedCount = Object.values(best).filter((v) => v >= PASS_LINE).length;
+
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-6 pb-10">
+      {/* hero */}
+      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-sky-500 p-6 text-white shadow-xl sm:p-8">
+        <div className="text-xs font-bold tracking-widest text-indigo-100">EIKEN GRADE 3 · SPEAKING TEST SIMULATOR</div>
+        <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">本番そっくりの面接を、何度でも。</h2>
+        <p className="mt-2 max-w-2xl text-sm text-indigo-50">
+          入室〜黙読20秒〜音読〜No.1〜5〜退室まで、面接官の声で自動進行。あなたは話すだけ。話し終えて少し黙れば次の質問へ進みます。
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold">
+          {[
+            [Mic, 'マイクで回答・自動送信'],
+            [Timer, '黙読20秒タイマー'],
+            [MessageSquare, 'Pardon? で聞き返し'],
+            [CheckCircle2, `${cards.length}枚の問題カード`],
+          ].map(([Icon, t], i) => {
+            const I = Icon as typeof Mic;
+            return (
+              <span key={i} className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
+                <I className="h-3.5 w-3.5" /> {t as string}
+              </span>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* mode + examiner */}
+      <section className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 text-sm font-black text-slate-900">モード</div>
+          <div className="grid grid-cols-2 gap-2">
+            <ModeBtn
+              active={settings.mode === 'exam'}
+              onClick={() => setMode('exam')}
+              icon={<GraduationCap className="h-5 w-5" />}
+              title="本番モード"
+              desc="途中で止まらず最後まで。終了後にまとめて採点と解説"
+            />
+            <ModeBtn
+              active={settings.mode === 'practice'}
+              onClick={() => setMode('practice')}
+              icon={<Dumbbell className="h-5 w-5" />}
+              title="練習モード"
+              desc="1問ごとに採点・解説・模範解答。やり直しもOK"
+            />
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 text-sm font-black text-slate-900">面接官</div>
+          <div className="grid grid-cols-3 gap-2">
+            {EXAMINERS.map((e) => (
+              <button
+                key={e.id}
+                onClick={() => onSettings({ ...settings, examinerId: e.id })}
+                className={`rounded-xl border-2 p-2 text-left transition ${
+                  settings.examinerId === e.id ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={`mb-1 h-1.5 w-8 rounded-full bg-gradient-to-r ${e.color}`} />
+                <div className="text-xs font-black text-slate-900">{e.name}</div>
+                <div className="mt-0.5 text-[10px] leading-snug text-slate-500">{e.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* cards */}
+      <section>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h3 className="text-base font-black text-slate-900">問題カードを選ぶ</h3>
+          <span className="text-xs text-slate-500">
+            挑戦済み {done}/{cards.length} · 合格圏 {passedCount}
+          </span>
+          <div className="ml-auto flex gap-1 rounded-xl bg-slate-200/70 p-1 text-xs font-bold">
+            {(['all', 'basic', 'standard', 'challenge'] as const).map((l) => (
+              <button
+                key={l}
+                onClick={() => setLevel(l)}
+                className={`rounded-lg px-2.5 py-1 ${level === l ? 'bg-white text-slate-900 shadow' : 'text-slate-500'}`}
+              >
+                {l === 'all' ? 'すべて' : LEVEL_LABEL[l]}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => onStart(list[Math.floor(Math.random() * list.length)])}
+            className="inline-flex items-center gap-1 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700"
+          >
+            <Shuffle className="h-3.5 w-3.5" /> ランダムで開始
+          </button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {list.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => onStart(c)}
+              className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-slate-400">#{String(cards.indexOf(c) + 1).padStart(2, '0')}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${LEVEL_COLOR[c.level]}`}>{LEVEL_LABEL[c.level]}</span>
+                <span className="text-[10px] text-slate-500">{c.category}</span>
+                {best[c.id] !== undefined && (
+                  <span
+                    className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-black ${
+                      best[c.id] >= PASS_LINE ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    最高 {best[c.id]}点
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 font-serif text-lg font-bold text-slate-900">{c.title}</div>
+              <div className="text-xs text-slate-500">{c.japaneseTitle}</div>
+              <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-indigo-600 opacity-0 transition group-hover:opacity-100">
+                <Play className="h-3.5 w-3.5" /> このカードで面接開始
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {history.length > 0 && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 text-sm font-black text-slate-900">最近の結果</div>
+          <div className="flex items-end gap-1.5 overflow-x-auto pb-1">
+            {history
+              .slice(0, 20)
+              .reverse()
+              .map((h) => (
+                <div key={h.id} className="flex w-8 shrink-0 flex-col items-center" title={`${h.date} ${h.cardTitle} ${h.total}点`}>
+                  <div className="text-[10px] font-bold text-slate-600">{h.total}</div>
+                  <div className={`w-5 rounded-t ${h.passed ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ height: `${(h.total / 33) * 80}px` }} />
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+};
+
+const ModeBtn: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; title: string; desc: string }> = ({
+  active,
+  onClick,
+  icon,
+  title,
+  desc,
+}) => (
+  <button
+    onClick={onClick}
+    className={`rounded-xl border-2 p-3 text-left transition ${active ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}
+  >
+    <div className={`flex items-center gap-1.5 text-sm font-black ${active ? 'text-indigo-700' : 'text-slate-800'}`}>
+      {icon}
+      {title}
+    </div>
+    <div className="mt-1 text-[11px] leading-snug text-slate-500">{desc}</div>
+  </button>
+);

@@ -1,0 +1,53 @@
+import React from 'react';
+import { ExamCard } from '../types';
+import { SceneIllustration } from './SceneIllustration';
+import { CardState } from '../engine/interview';
+
+interface Props {
+  card: ExamCard;
+  state: CardState;
+  timer: number | null;
+  showTranslation?: boolean;
+}
+
+export const ExamCardView: React.FC<Props> = ({ card, state, timer, showTranslation }) => {
+  if (state === 'none') {
+    return (
+      <div className="flex h-full min-h-[260px] items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 p-6 text-center text-sm text-slate-400">
+        問題カードは面接官から渡されます
+      </div>
+    );
+  }
+  return (
+    <div className="relative h-full [perspective:1600px]">
+      <div
+        className="relative h-full transition-transform duration-700 [transform-style:preserve-3d]"
+        style={{ transform: state === 'back' ? 'rotateY(180deg)' : 'none' }}
+      >
+        {/* front */}
+        <div className="h-full overflow-y-auto rounded-2xl border border-slate-300 bg-[#fffef8] p-4 shadow-xl [backface-visibility:hidden] sm:p-5">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="rounded bg-slate-900 px-2 py-0.5 text-[10px] font-bold tracking-widest text-white">GRADE 3</span>
+            {timer !== null && (
+              <span className={`rounded-full px-3 py-1 text-sm font-black tabular-nums ${timer <= 5 ? 'bg-rose-500 text-white' : 'bg-indigo-600 text-white'}`}>
+                黙読 {timer}s
+              </span>
+            )}
+          </div>
+          <h3 className="text-center font-serif text-xl font-bold text-slate-900 sm:text-2xl">{card.title}</h3>
+          <p className="mt-3 font-serif text-[1.05rem] leading-relaxed text-slate-800 sm:text-lg">{card.passage}</p>
+          {showTranslation && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs leading-relaxed text-amber-900">{card.passageJa}</p>}
+          <div className="mt-4">
+            <SceneIllustration scene={card.scene} />
+          </div>
+        </div>
+        {/* back */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 p-6 text-center text-white shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)]">
+          <div className="text-5xl font-black tracking-widest opacity-90">英検</div>
+          <div className="mt-1 text-lg font-bold tracking-[0.4em] opacity-70">GRADE 3</div>
+          <p className="mt-6 text-sm text-indigo-200">カードを裏返しました。<br />ここからは「あなた自身」についての質問です。</p>
+        </div>
+      </div>
+    </div>
+  );
+};
