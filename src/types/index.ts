@@ -131,6 +131,23 @@ export interface StepFeedback {
   source: 'claude' | 'local';
 }
 
+/** Azure 発音評価の結果（音読のみ） */
+export interface PronWord {
+  word: string; // 本文の単語（表示用）
+  accuracy: number | null; // 0-100。読み落としは null
+  status: 'good' | 'fair' | 'poor' | 'omitted';
+}
+
+export interface ReadingAssessment {
+  overall: number; // 総合（参考値）
+  accuracy: number; // 発音の正確さ
+  fluency: number; // 流暢さ
+  completeness: number; // 読み切れた割合
+  prosody: number | null; // 抑揚・リズム
+  words: PronWord[];
+  insertions: string[]; // 本文にない語
+}
+
 export interface AnswerRecord {
   item: ScoredItem;
   question: string;
@@ -142,6 +159,8 @@ export interface AnswerRecord {
   latencySec: number | null;
   pardonUsed: boolean;
   feedback?: StepFeedback;
+  /** 音読の発音評価（Azure 設定時） */
+  pronunciation?: ReadingAssessment;
 }
 
 export interface FinalReport {
@@ -183,4 +202,9 @@ export interface AppSettings {
   silenceSec: number;
   /** 練習モードで模範解答を読み上げる */
   readModelAnswer: boolean;
+  /** 練習モード: 音読の前にお手本音読を聞く */
+  listenModelFirst: boolean;
+  /** Azure Speech（音読の発音評価） */
+  azureKey: string;
+  azureRegion: string;
 }

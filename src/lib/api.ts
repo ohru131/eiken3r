@@ -1,6 +1,9 @@
 import { AnswerRecord, AppSettings, ExamCard, FinalReport, ScoredItem, StepFeedback } from '../types';
 import { ITEM_LABELS, getQuestion, localEvaluate } from './scoring';
-import { createClient, describeError, evaluateWithClaude, reportWithClaude } from './claude';
+import { summarizeAssessment } from './azurePronunciation';
+import type Anthropic from '@anthropic-ai/sdk';
+
+const loadClaude = () => import('./claude');
 
 export interface ServerStatus {
   serverKey: boolean;
@@ -20,12 +23,13 @@ export async function fetchStatus(): Promise<ServerStatus> {
 const headers = (model: string): Record<string, string> => ({ 'Content-Type': 'application/json', 'x-claude-model': model });
 
 /** ブラウザにキーがあれば Claude API を直接呼ぶ。無ければ（ローカル開発時の）サーバーへ */
-async function callClaude<T>(s: AppSettings, model: string, path: string, body: any, direct: (c: ReturnType<typeof createClient>) => Promise<T>): Promise<T> {
+async function callClaude<T>(s: AppSettings, model: string, path: string, body: any, direct: (c: Anthropic, m: Awaited<ReturnType<typeof loadClaude>>) => Promise<T>): Promise<T> {
   if (s.apiKey) {
+    const m = await loadClaude();
     try {
-      return await direct(createClient(s.apiKey, true));
+      return await direct(m.createClient(s.apiKey, true), m);
     } catch (e) {
-      throw new Error(describeError(e).message);
+      throw new Error(m.describeError(e).message);
     }
   }
   const r = await fetch(path, { method: 'POST', headers: headers(model), body: JSON.stringify(body) });
@@ -58,9 +62,10 @@ export async function evaluateAnswer(
     followUpQuestion: rec.followUpQuestion,
     followUpAnswer: rec.followUpAnswer,
     pardonUsed: rec.pardonUsed,
+    pronunciationSummary: rec.pronunciation ? summarizeAssessment(rec.pronunciation) : undefined,
   };
   try {
-    return await callClaude<StepFeedback>(settings, settings.evalModel, 'api/evaluate', body, (c) => evaluateWithClaude(c, settings.evalModel, body));
+    return await callClaude<StepFeedback>(settings, settings.evalModel, 'api/evaluate', body, (c, m) => m.evaluateWithClaude(c, settings.evalModel, body));
   } catch (e: any) {
     return { ...localEvaluate(card, rec), error: e?.message || 'network' };
   }
@@ -94,7 +99,7 @@ export async function generateReport(
           latencySec: x.latencySec,
         })),
     };
-    return await callClaude(settings, settings.reportModel, 'api/report', body, (c) => reportWithClaude(c, settings.reportModel, body));
+    return await callClaude(settings, settings.reportModel, 'api/report', body, (c, m) => m.reportWithClaude(c, settings.reportModel, body));
   } catch {
     return local();
   }

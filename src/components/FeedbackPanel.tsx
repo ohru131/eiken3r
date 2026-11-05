@@ -5,6 +5,7 @@ import { EvalResult } from '../lib/api';
 import { ITEM_LABELS } from '../lib/scoring';
 import { playSfx } from '../lib/sfx';
 import { FeedbackAction } from '../engine/interview';
+import { ModelReading, PronunciationView } from './ReadingReview';
 
 interface Props {
   card: ExamCard;
@@ -46,10 +47,12 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
       if (!alive) return;
       setFb(r);
       playSfx(r.score >= 5 ? 'correct' : r.score >= 3 ? 'good' : 'retry');
-      if (readModelAnswer && r.improvedAnswer) {
+      // 音読はお手本（タイトル＋本文）を必ず読み上げ。その他は満点解答
+      const modelText = rec.item === 'reading' ? `${card.title}. ${card.passage}` : r.improvedAnswer;
+      if (readModelAnswer && modelText) {
         setSpeakingModel(true);
         await new Promise((res) => setTimeout(res, 700));
-        if (alive) await onSpeak(r.improvedAnswer).catch(() => {});
+        if (alive) await onSpeak(modelText).catch(() => {});
         if (alive) setSpeakingModel(false);
       }
     });
@@ -98,6 +101,9 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
             </div>
           )}
         </div>
+
+        {rec.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}
+        {rec.item === 'reading' && <ModelReading card={card} onSpeak={onSpeak} />}
 
         {!fb ? (
           <div className="flex items-center gap-2 py-6 text-slate-500">

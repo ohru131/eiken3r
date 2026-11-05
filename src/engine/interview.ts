@@ -1,9 +1,12 @@
 // 面接の進行スクリプト。面接官の発話 → 自動でマイクON → 無音検知で自動送信 → 次へ、を繰り返す。
-import { AnswerRecord, AppSettings, ExamCard, ExaminerProfile, PhaseId, ScoredItem } from '../types';
+import { AnswerRecord, AppSettings, ExamCard, ExaminerProfile, PhaseId, ReadingAssessment, ScoredItem } from '../types';
 import { ListenResult, listen, sleep, speak } from '../lib/speech';
 import { playSfx } from '../lib/sfx';
 import { EvalResult, evaluateAnswer } from '../lib/api';
 import { isYesAnswer } from '../lib/scoring';
+import { AzureUnavailableError, azureConfigured, listenReadingAzure } from '../lib/azurePronunciation';
+
+export const modelReadingText = (card: ExamCard) => `${card.title}. ${card.passage}`;
 
 export type CardState = 'none' | 'front' | 'back';
 export type FeedbackAction = 'next' | 'retry';
@@ -85,6 +88,36 @@ export async function runInterview(
       bridge.setSilence(0);
       playSfx('micOff');
     }
+  };
+
+  /** 音読: Azure 設定があれば発音評価付きで録音。失敗時はブラウザの音声認識 */
+  const hearReading = async (): Promise<ListenResult & { assessment?: ReadingAssessment | null }> => {
+    if (azureConfigured(settings.azureKey, settings.azureRegion)) {
+      playSfx('micOn');
+      bridge.setInterim('');
+      bridge.setListening(true, 'タイトルから音読しましょう（発音評価中）');
+      try {
+        return await listenReadingAzure({
+          key: settings.azureKey,
+          region: settings.azureRegion,
+          referenceText: modelReadingText(card),
+          silenceMs: Math.max(3000, settings.silenceSec * 1500),
+          noSpeechMs: 15000,
+          maxMs: 90000,
+          signal,
+          onInterim: bridge.setInterim,
+          onSilenceProgress: bridge.setSilence,
+        });
+      } catch (e) {
+        if (!(e instanceof AzureUnavailableError)) throw e;
+        console.warn('Azure 発音評価を使えないため通常の音声認識に切り替え:', e.message);
+      } finally {
+        bridge.setListening(false);
+        bridge.setSilence(0);
+        playSfx('micOff');
+      }
+    }
+    return hear('reading', 'タイトルから音読しましょう');
   };
 
   /** 挨拶など採点外のやりとり */
@@ -196,14 +229,32 @@ export async function runInterview(
 
     // ---- 音読 ----
     bridge.setPhase('reading_aloud');
+    if (practice && settings.listenModelFirst) {
+      // 練習モード: 先にお手本音読を聞く（本番にはない練習用ステップ）
+      await say("Before you read, let's listen to a model reading.", '音読の前に、お手本を聞きましょう。');
+      bridge.setLine(modelReadingText(card), 'お手本音読：区切り（カンマ・ピリオド）と強弱をまねしましょう');
+      bridge.setSpeaking(true);
+      try {
+        await speak(modelReadingText(card), {
+          voiceHints: examiner.voiceHints,
+          rate: examiner.rate * settings.speechRate * 0.92,
+          pitch: examiner.pitch,
+          signal,
+        });
+      } finally {
+        bridge.setSpeaking(false);
+      }
+      await sleep(600, signal);
+    }
     await say('All right. Now, please read it aloud.', 'では、声に出して読んでください。');
-    const rd = await hear('reading', 'タイトルから音読しましょう');
+    const rd = await hearReading();
     const readingRec: AnswerRecord = {
       item: 'reading',
       question: 'Please read the passage aloud.',
       answer: rd.text,
       latencySec: rd.latencySec,
       pardonUsed: false,
+      pronunciation: rd.assessment ?? undefined,
     };
     records.set('reading', readingRec);
     bridge.upsertRecord(readingRec);

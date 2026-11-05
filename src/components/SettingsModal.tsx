@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { X, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { X, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, Mic2 } from 'lucide-react';
 import { AppSettings } from '../types';
 import { MODEL_OPTIONS } from '../lib/settings';
 import { ServerStatus } from '../lib/api';
-import { testConnection } from '../lib/claude';
+import { azureConfigured, testAzure } from '../lib/azurePronunciation';
 
 interface Props {
   open: boolean;
@@ -19,7 +19,9 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
   const runTest = async () => {
     setTest({ state: 'testing' });
     const err =
-      (await testConnection(settings.apiKey, settings.evalModel)) ?? (await testConnection(settings.apiKey, settings.reportModel));
+      await import('../lib/claude').then(
+        async (m) => (await m.testConnection(settings.apiKey, settings.evalModel)) ?? (await m.testConnection(settings.apiKey, settings.reportModel))
+      );
     setTest(err ? { state: 'ng', msg: err } : { state: 'ok' });
   };
   if (!open) return null;
@@ -96,6 +98,9 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
             </p>
           </section>
 
+          {/* azure */}
+          <AzureSection settings={settings} set={set} />
+
           {/* flow */}
           <section className="space-y-3">
             <div className="font-black text-slate-900">進行・音声</div>
@@ -119,11 +124,82 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
             />
             <Toggle label="効果音" checked={settings.sfx} onChange={(v) => set('sfx', v)} />
             <Toggle label="練習モード：解説後に自動で次へ進む" checked={settings.autoAdvance} onChange={(v) => set('autoAdvance', v)} />
-            <Toggle label="練習モード：満点解答を読み上げる" checked={settings.readModelAnswer} onChange={(v) => set('readModelAnswer', v)} />
+            <Toggle label="練習モード：満点解答・お手本音読を読み上げる" checked={settings.readModelAnswer} onChange={(v) => set('readModelAnswer', v)} />
+            <Toggle label="練習モード：音読の前にお手本を聞く" checked={settings.listenModelFirst} onChange={(v) => set('listenModelFirst', v)} />
           </section>
         </div>
       </div>
     </div>
+  );
+};
+
+const AzureSection: React.FC<{ settings: AppSettings; set: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void }> = ({ settings, set }) => {
+  const [show, setShow] = useState(false);
+  const [test, setTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'ng'; msg?: string }>({ state: 'idle' });
+  const on = azureConfigured(settings.azureKey, settings.azureRegion);
+  return (
+    <section>
+      <div className="mb-1.5 flex items-center gap-1.5 font-black text-slate-900">
+        <Mic2 className="h-4 w-4" /> 音読の発音評価（Azure Speech・任意）
+      </div>
+      <div className="flex gap-2">
+        <input
+          type={show ? 'text' : 'password'}
+          value={settings.azureKey}
+          onChange={(e) => {
+            set('azureKey', e.target.value.trim());
+            setTest({ state: 'idle' });
+          }}
+          placeholder="Speech リソースのキー"
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs outline-none focus:border-indigo-500"
+        />
+        <button onClick={() => setShow((v) => !v)} className="rounded-lg border border-slate-300 px-2 text-slate-500">
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+      <label className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-700">
+        リージョン
+        <input
+          value={settings.azureRegion}
+          onChange={(e) => {
+            set('azureRegion', e.target.value.trim());
+            setTest({ state: 'idle' });
+          }}
+          placeholder="japaneast"
+          className="w-40 rounded-lg border border-slate-300 px-2 py-1 font-mono text-xs"
+        />
+      </label>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          onClick={async () => {
+            setTest({ state: 'testing' });
+            const err = await testAzure(settings.azureKey, settings.azureRegion);
+            setTest(err ? { state: 'ng', msg: err } : { state: 'ok' });
+          }}
+          disabled={!on || test.state === 'testing'}
+          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+        >
+          {test.state === 'testing' ? '確認中…' : '接続テスト'}
+        </button>
+        {settings.azureKey && (
+          <button
+            onClick={() => {
+              set('azureKey', '');
+              setTest({ state: 'idle' });
+            }}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600"
+          >
+            キーを削除
+          </button>
+        )}
+        {test.state === 'ok' && <span className="text-xs font-bold text-emerald-700">接続OK</span>}
+        {test.state === 'ng' && <span className="text-xs font-bold text-rose-600">{test.msg}</span>}
+      </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+        設定すると、音読の録音を Azure（Microsoft）に送り、単語ごとの発音・流暢さ・読み落とし・抑揚を評価します。質問への回答は今まで通りブラウザの音声認識です。キーはこのブラウザにだけ保存されます。
+        Azure ポータルで「Speech」リソースを作成し、「キーとエンドポイント」のキーとリージョン（例: japaneast）を入力してください。無料枠（F0）で使えます。
+      </p>
+    </section>
   );
 };
 
