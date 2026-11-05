@@ -54,8 +54,28 @@ export function localEvaluate(card: ExamCard, rec: AnswerRecord): StepFeedback {
       verdict: '無回答',
       goodPoints: '—',
       corrections: '回答が聞き取れませんでした。分からない時も知っている単語で何か答えると点がもらえます。',
-      improvedAnswer: rec.item === 'reading' ? card.passage : getQuestion(card, rec.item)!.modelAnswers[0],
+      improvedAnswer: rec.item === 'reading' ? `${card.title}. ${card.passage}` : getQuestion(card, rec.item)!.modelAnswers[0],
       tip: '沈黙は0点。「Pardon?」と聞き返すのは1回までなら減点されません。',
+    };
+  }
+
+  if (rec.item === 'reading' && rec.pronunciation) {
+    const a = rec.pronunciation;
+    let score = a.overall >= 90 ? 5 : a.overall >= 80 ? 4 : a.overall >= 65 ? 3 : a.overall >= 50 ? 2 : 1;
+    if (a.completeness < 70) score = Math.min(score, 3);
+    const weak = a.words.filter((w) => w.status === 'poor').map((w) => w.word);
+    const omitted = a.words.filter((w) => w.status === 'omitted').map((w) => w.word);
+    return {
+      ...base,
+      score,
+      verdict: score >= 4 ? 'よく読めました' : score >= 3 ? 'あと一歩' : '要練習',
+      goodPoints: `発音の正確さ ${a.accuracy}点・流暢さ ${a.fluency}点（100点満点）。`,
+      corrections:
+        [weak.length ? `発音が弱い語: ${weak.slice(0, 6).join(', ')}` : '', omitted.length ? `読み落とし: ${omitted.slice(0, 6).join(', ')}` : '']
+          .filter(Boolean)
+          .join(' / ') || '大きな問題はありません。',
+      improvedAnswer: `${card.title}. ${card.passage}`,
+      tip: '赤・黄色の単語をお手本で聞き、まねしてから全体をもう一度読みましょう。',
     };
   }
 

@@ -26,6 +26,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoAdvance: true,
   silenceSec: 2.2,
   readModelAnswer: true,
+  listenModelFirst: true,
+  azureKey: '',
+  azureRegion: 'japaneast',
 };
 
 export function loadSettings(): AppSettings {

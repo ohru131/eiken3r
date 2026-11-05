@@ -139,6 +139,9 @@ export interface ListenHandle {
 
 let activeHandle: ListenHandle | null = null;
 export const getActiveListen = () => activeHandle;
+export const setActiveListen = (h: ListenHandle | null) => {
+  activeHandle = h;
+};
 
 export function listen(opts: ListenOptions): Promise<ListenResult> {
   const { signal } = opts;

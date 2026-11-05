@@ -82,6 +82,8 @@ export interface EvaluateInput {
   followUpQuestion?: string;
   followUpAnswer?: string;
   pardonUsed?: boolean;
+  /** 音読の Azure 発音評価の要約 */
+  pronunciationSummary?: string;
 }
 
 export async function evaluateWithClaude(client: Anthropic, model: string, b: EvaluateInput) {
@@ -95,6 +97,9 @@ export async function evaluateWithClaude(client: Anthropic, model: string, b: Ev
     `【受験者の回答（音声認識）】"${b.answer || ''}"`,
     b.followUpQuestion ? `【追加質問】${b.followUpQuestion}\n【追加質問への回答】"${b.followUpAnswer || ''}"` : '',
     b.pardonUsed ? '（受験者は聞き返しをしました。1回までは減点しません）' : '',
+    b.pronunciationSummary
+      ? `【Azure 発音評価（実際の音声を機械評価）】\n${b.pronunciationSummary}\n→ 音読の点数はこの発音評価を主な根拠にし、弱い語の発音のコツを具体的に指摘すること。`
+      : '',
   ]
     .filter(Boolean)
     .join('\n');
