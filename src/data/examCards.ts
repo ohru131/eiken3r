@@ -350,8 +350,8 @@ const BASE_CARDS: ExamCard[] = [
       text: 'Please look at the picture. What is the boy going to do?',
       ja: 'イラストを見てください。男の子はこれから何をしようとしていますか？',
       modelAnswers: [
-        'He is going to throw away a bottle.',
         'He is going to throw away a cup.',
+        'He is going to throw away a bottle.',
         'He is going to put it in the trash can.',
       ],
       explanation: '男の子の吹き出しにゴミ箱のマークがあります。手に持ったものを捨てようとしています。be going to で答えます。',
@@ -419,8 +419,8 @@ const BASE_CARDS: ExamCard[] = [
         { emoji: '🚆', x: 60, y: 38, size: 6 },
         { emoji: '👨', x: 25, y: 66, size: 3.6 },
         { emoji: '📷', x: 34, y: 60, size: 2 },
-        { emoji: '🪑', x: 62, y: 76, size: 3.4 },
-        { emoji: '🧳', x: 74, y: 80, size: 2.4 },
+        { emoji: '[bench]', x: 58, y: 76, size: 3.2 },
+        { emoji: '🧳', x: 77, y: 80, size: 2.4 },
         { emoji: '👩', x: 88, y: 66, size: 3.4 },
       ],
       description:
@@ -1334,8 +1334,8 @@ const BASE_CARDS: ExamCard[] = [
         { emoji: '🐒', x: 36, y: 62, size: 2.6 },
         { emoji: '🦒', x: 60, y: 45, size: 5 },
         { emoji: '👦', x: 48, y: 72, size: 3.4 },
-        { emoji: '🪑', x: 80, y: 76, size: 3.4 },
-        { emoji: '🍦', x: 80, y: 66, size: 1.8 },
+        { emoji: '[bench]', x: 79, y: 77, size: 3.2 },
+        { emoji: '🍦', x: 79, y: 69, size: 1.8 },
       ],
       description:
         'At a zoo, there are three monkeys on the left and a giraffe in the middle. A boy is standing in front. An ice cream is on the bench on the right.',
@@ -1513,8 +1513,8 @@ const BASE_CARDS: ExamCard[] = [
       background: 'station',
       items: [
         { emoji: '🚆', x: 62, y: 38, size: 6 },
-        { emoji: '🪑', x: 22, y: 76, size: 3.4 },
-        { emoji: '🎒', x: 22, y: 85, size: 1.8 },
+        { emoji: '[bench]', x: 20, y: 74, size: 3.2 },
+        { emoji: '🎒', x: 20, y: 80, size: 1.8 },
         { emoji: '👨', x: 45, y: 68, size: 3.6 },
         { emoji: '📖', x: 53, y: 66, size: 2 },
         { emoji: '👩', x: 85, y: 68, size: 3.4 },

@@ -8,6 +8,7 @@ import { playSfx } from '../lib/sfx';
 import { celebrateSmall } from '../lib/celebrate';
 import { FeedbackAction } from '../engine/interview';
 import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
+import { SceneIllustration } from './SceneIllustration';
 
 interface Props {
   card: ExamCard;
@@ -132,6 +133,11 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
         {rec.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}
         {!rec.pronunciation && rec.pronunciationNote && <PronunciationNote note={rec.pronunciationNote} />}
         {rec.item === 'reading' && <ModelReading card={card} onSpeak={onSpeak} />}
+        {(rec.item === 'q2' || rec.item === 'q3') && (
+          <div className="max-w-sm">
+            <SceneIllustration scene={card.scene} />
+          </div>
+        )}
 
         {!fb ? (
           <div className="flex items-center gap-2 py-6 text-slate-500">
