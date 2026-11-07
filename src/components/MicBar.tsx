@@ -9,7 +9,7 @@ interface Props {
   interim: string;
   silence: number;
   busyLabel?: string;
-  /** 本番モード: ヒントと認識文字を出さない */
+  /** 本番モード: 回答のヒントを出さない */
   exam?: boolean;
 }
 
@@ -88,15 +88,7 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
             {listening ? (exam ? '🎤 どうぞ、英語で話してください' : `🎤 ${hint}`) : speaking ? '面接官が話しています…' : busyLabel || '待機中'}
           </div>
           <div className="mt-0.5 min-h-[1.75rem] text-base font-semibold text-slate-900 sm:text-lg">
-            {listening &&
-              !typing &&
-              (exam ? (
-                <span className={`text-sm font-medium ${interim ? 'text-rose-600' : 'text-slate-400'}`}>
-                  {interim ? '● 声を聞き取っています…' : '（話し始めてください）'}
-                </span>
-              ) : (
-                interim || <span className="text-slate-400">（話し始めると文字が表示されます）</span>
-              ))}
+            {listening && !typing && (interim || <span className="text-slate-400">（話し始めると文字が表示されます）</span>)}
             {listening && typing && (
               <form
                 className="flex gap-2"
