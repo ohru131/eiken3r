@@ -157,7 +157,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
               onClick={() => setMode('exam')}
               icon={<GraduationCap className="h-5 w-5" />}
               title="本番モード"
-              desc="途中で止まらず最後まで。終了後にまとめて採点と解説"
+              desc="字幕・ヒントなしで本番どおり最後まで。終了後にまとめて採点と解説"
             />
             <ModeBtn
               active={settings.mode === 'practice'}

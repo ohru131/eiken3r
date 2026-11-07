@@ -84,6 +84,8 @@ export default function App() {
 
   const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
   const useClaude = canUseClaude(settings, status);
+  // 本番モード: 字幕・ヒント・認識文字・黙読タイマーを出さない
+  const examMode = settings.mode === 'exam';
 
   useEffect(() => {
     fetchStatus().then(setStatus);
@@ -335,12 +337,16 @@ export default function App() {
                     <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-bold text-slate-700">{examiner.name}</span>
                   </div>
                   <div className="absolute right-3 top-3 z-10 flex gap-1">
-                    <IconToggle on={showSubs} onClick={() => setShowSubs((v) => !v)} title="英語字幕">
-                      <Subtitles className="h-3.5 w-3.5" />
-                    </IconToggle>
-                    <IconToggle on={showJa} onClick={() => setShowJa((v) => !v)} title="和訳">
-                      <Languages className="h-3.5 w-3.5" />
-                    </IconToggle>
+                    {!examMode && (
+                      <>
+                        <IconToggle on={showSubs} onClick={() => setShowSubs((v) => !v)} title="英語字幕">
+                          <Subtitles className="h-3.5 w-3.5" />
+                        </IconToggle>
+                        <IconToggle on={showJa} onClick={() => setShowJa((v) => !v)} title="和訳">
+                          <Languages className="h-3.5 w-3.5" />
+                        </IconToggle>
+                      </>
+                    )}
                     <IconToggle on={!muted} onClick={() => setMuted((v) => !v)} title="解説の読み上げ音声">
                       {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
                     </IconToggle>
@@ -349,7 +355,22 @@ export default function App() {
                     <ExaminerFigure examiner={examiner} speaking={speaking} listening={listening} />
                   </div>
                   <div className="min-h-[5.5rem] border-t border-slate-200 bg-white/90 px-4 py-3">
-                    {line ? (
+                    {examMode && phase !== 'scoring' ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-6 items-end gap-0.5">
+                          {[0, 1, 2, 3, 4].map((i) => (
+                            <span
+                              key={i}
+                              className={`w-1 rounded-full ${speaking ? 'animate-pulse bg-indigo-500' : 'bg-slate-300'}`}
+                              style={{ height: speaking ? `${[40, 80, 100, 70, 50][i]}%` : '25%', animationDelay: `${i * 0.12}s` }}
+                            />
+                          ))}
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          {speaking ? '面接官が話しています。よく聞きましょう。' : listening ? 'あなたが答える番です。' : '本番モード：字幕は表示されません'}
+                        </div>
+                      </div>
+                    ) : line ? (
                       <>
                         {showSubs ? (
                           <div className={`text-base font-semibold leading-snug sm:text-lg ${speaking ? 'text-slate-900' : 'text-slate-600'}`}>“{line.text}”</div>
@@ -364,6 +385,7 @@ export default function App() {
                   </div>
                 </div>
                 <MicBar
+                  exam={examMode}
                   speaking={speaking}
                   listening={listening}
                   hint={hint}
@@ -391,7 +413,7 @@ export default function App() {
                     prevStreak={streakBefore(pending.rec.item, records)}
                   />
                 ) : (
-                  <ExamCardView card={card} state={cardState} timer={timer} showTranslation={showJa && settings.mode === 'practice'} />
+                  <ExamCardView card={card} state={cardState} timer={examMode ? null : timer} showTranslation={showJa && !examMode} />
                 )}
               </div>
             </div>

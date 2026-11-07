@@ -9,9 +9,11 @@ interface Props {
   interim: string;
   silence: number;
   busyLabel?: string;
+  /** 本番モード: ヒントと認識文字を出さない */
+  exam?: boolean;
 }
 
-export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, silence, busyLabel }) => {
+export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, silence, busyLabel, exam }) => {
   const supported = hasSpeechRecognition();
   const [typing, setTyping] = useState(!supported);
   const [text, setText] = useState('');
@@ -83,10 +85,18 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
 
         <div className="min-w-0 flex-1">
           <div className={`text-xs font-bold ${listening ? 'text-rose-700' : speaking ? 'text-indigo-700' : 'text-slate-500'}`}>
-            {listening ? `🎤 ${hint}` : speaking ? '面接官が話しています…' : busyLabel || '待機中'}
+            {listening ? (exam ? '🎤 どうぞ、英語で話してください' : `🎤 ${hint}`) : speaking ? '面接官が話しています…' : busyLabel || '待機中'}
           </div>
           <div className="mt-0.5 min-h-[1.75rem] text-base font-semibold text-slate-900 sm:text-lg">
-            {listening && !typing && (interim || <span className="text-slate-400">（話し始めると文字が表示されます）</span>)}
+            {listening &&
+              !typing &&
+              (exam ? (
+                <span className={`text-sm font-medium ${interim ? 'text-rose-600' : 'text-slate-400'}`}>
+                  {interim ? '● 声を聞き取っています…' : '（話し始めてください）'}
+                </span>
+              ) : (
+                interim || <span className="text-slate-400">（話し始めると文字が表示されます）</span>
+              ))}
             {listening && typing && (
               <form
                 className="flex gap-2"
