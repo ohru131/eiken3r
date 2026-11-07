@@ -21,10 +21,22 @@ export const words = (s: string) =>
     .split(/\s+/)
     .filter(Boolean);
 
+// イラストの見た目で呼び方が分かれる語は同じものとして扱う
+const SYNONYMS: Record<string, string> = {
+  bench: 'seat', chair: 'seat', seat: 'seat',
+  backpack: 'bag', bag: 'bag', rucksack: 'bag',
+  cup: 'cup', bottle: 'cup', can: 'cup',
+  photo: 'picture', photos: 'pictures', picture: 'picture', pictures: 'pictures',
+  bike: 'bicycle', bicycle: 'bicycle',
+  couch: 'sofa', sofa: 'sofa',
+  kid: 'boy', child: 'boy',
+};
+const canon = (w: string) => SYNONYMS[w] ?? w;
+
 function overlap(answer: string, target: string): number {
-  const t = words(target).filter((w) => !STOP.has(w));
+  const t = words(target).filter((w) => !STOP.has(w)).map(canon);
   if (!t.length) return 0;
-  const a = new Set(words(answer));
+  const a = new Set(words(answer).map(canon));
   return t.filter((w) => a.has(w)).length / t.length;
 }
 

@@ -5,6 +5,7 @@ import { ITEM_LABELS, PASS_LINE } from '../lib/scoring';
 import { FeedbackBody, ScoreDots } from './FeedbackPanel';
 import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
 import { Achievement, ScoreHero } from './ScoreHero';
+import { SceneIllustration } from './SceneIllustration';
 
 interface Props {
   card: ExamCard;
@@ -136,6 +137,22 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                     <div className="font-semibold text-slate-900">{q ? q.text : 'Please read the passage aloud.'}</div>
                     {q && <div className="text-xs text-slate-500">{q.ja}</div>}
                   </div>
+                  {(k === 'q2' || k === 'q3') && (
+                    <div>
+                      <div className="mb-1 text-[12px] font-bold text-slate-500">イラスト</div>
+                      <div className="max-w-md">
+                        <SceneIllustration scene={card.scene} />
+                      </div>
+                    </div>
+                  )}
+                  {k === 'q1' && (
+                    <div className="rounded-lg border border-slate-200 bg-[#fffef8] p-3">
+                      <div className="mb-0.5 text-[12px] font-bold text-slate-500">パッセージ</div>
+                      <div className="font-serif text-[15px] leading-relaxed text-slate-800">
+                        <span className="font-bold">{card.title}.</span> {card.passage}
+                      </div>
+                    </div>
+                  )}
                   <div className="rounded-lg bg-slate-100 p-2.5">
                     <div className="text-[12px] font-bold text-slate-500">あなたの回答</div>
                     <div className="text-slate-900">{rec?.answer || '（無回答）'}</div>
