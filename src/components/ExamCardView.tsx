@@ -25,9 +25,9 @@ export const ExamCardView: React.FC<Props> = ({ card, state, timer, showTranslat
         style={{ transform: state === 'back' ? 'rotateY(180deg)' : 'none' }}
       >
         {/* front */}
-        <div className="h-full overflow-y-auto rounded-2xl border border-slate-300 bg-[#fffef8] p-4 shadow-xl [backface-visibility:hidden] sm:p-5">
+        <div className="flex h-full flex-col overflow-y-auto rounded-2xl border border-slate-300 bg-[#fffef8] p-4 shadow-xl [backface-visibility:hidden] sm:p-5 lg:overflow-hidden">
           <div className="mb-2 flex items-center justify-between">
-            <span className="rounded bg-slate-900 px-2 py-0.5 text-[10px] font-bold tracking-widest text-white">GRADE 3</span>
+            <span className="rounded bg-slate-900 px-2 py-0.5 text-[11px] font-bold tracking-widest text-white">GRADE 3</span>
             {timer !== null && (
               <span className={`rounded-full px-3 py-1 text-sm font-black tabular-nums ${timer <= 5 ? 'bg-rose-500 text-white' : 'bg-indigo-600 text-white'}`}>
                 黙読 {timer}s
@@ -35,10 +35,13 @@ export const ExamCardView: React.FC<Props> = ({ card, state, timer, showTranslat
             )}
           </div>
           <h3 className="text-center font-serif text-xl font-bold text-slate-900 sm:text-2xl">{card.title}</h3>
-          <p className="mt-3 font-serif text-[1.05rem] leading-relaxed text-slate-800 sm:text-lg">{card.passage}</p>
+          <p className="mt-2 font-serif text-lg leading-relaxed text-slate-800 sm:text-xl">{card.passage}</p>
           {showTranslation && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs leading-relaxed text-amber-900">{card.passageJa}</p>}
-          <div className="mt-4">
-            <SceneIllustration scene={card.scene} />
+          {/* 大画面では残りの高さに収まるよう、縦横比 5:3 を保ったまま縮める */}
+          <div className="mt-3 flex justify-center lg:min-h-[140px] lg:flex-1 lg:[container-type:size]">
+            <div className="w-full lg:w-[min(100cqw,calc(100cqh*5/3))]">
+              <SceneIllustration scene={card.scene} />
+            </div>
           </div>
         </div>
         {/* back */}

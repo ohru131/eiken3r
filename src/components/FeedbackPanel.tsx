@@ -99,7 +99,7 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
                 initial={{ opacity: 0, x: 8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.5 }}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-amber-300"
+                className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-bold text-amber-300"
               >
                 <Flame className="h-3 w-3" /> {prevStreak + 1}問連続 高得点
               </motion.span>
@@ -119,11 +119,11 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm">
         <div className="rounded-xl bg-slate-100 p-3">
-          <div className="text-[11px] font-bold text-slate-500">あなたの回答</div>
+          <div className="text-[12px] font-bold text-slate-500">あなたの回答</div>
           <div className="mt-0.5 font-semibold text-slate-900">{rec.answer || '（無回答）'}</div>
           {rec.followUpQuestion && (
             <div className="mt-1.5 text-slate-700">
-              <span className="text-[11px] font-bold text-slate-500">{rec.followUpQuestion}</span>
+              <span className="text-[12px] font-bold text-slate-500">{rec.followUpQuestion}</span>
               <div className="font-semibold text-slate-900">{rec.followUpAnswer || '（無回答）'}</div>
             </div>
           )}
@@ -145,10 +145,10 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
           <div className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
             <div className="flex items-center gap-1 text-xs font-black text-indigo-900">
               <BookOpen className="h-3.5 w-3.5" /> 解説
-              <span className="ml-1 rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{q.point}</span>
+              <span className="ml-1 rounded bg-indigo-600 px-1.5 py-0.5 text-[11px] font-bold text-white">{q.point}</span>
             </div>
-            <p className="text-[13px] leading-relaxed text-slate-800">{q.explanation}</p>
-            <div className="text-[11px] text-slate-500">{q.ja}</div>
+            <p className="text-[14px] leading-relaxed text-slate-800">{q.explanation}</p>
+            <div className="text-[12px] text-slate-500">{q.ja}</div>
             <ModelList title="模範解答" items={models} onSpeak={onSpeak} />
             {rec.item === 'q5' && (
               <>
@@ -158,10 +158,10 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
             )}
             {q.commonMistakes && q.commonMistakes.length > 0 && (
               <div>
-                <div className="flex items-center gap-1 text-[11px] font-bold text-rose-700">
+                <div className="flex items-center gap-1 text-[12px] font-bold text-rose-700">
                   <AlertTriangle className="h-3 w-3" /> よくある間違い
                 </div>
-                <ul className="ml-4 list-disc text-[12px] text-slate-700">
+                <ul className="ml-4 list-disc text-[13px] text-slate-700">
                   {q.commonMistakes.map((m, i) => (
                     <li key={i}>{m}</li>
                   ))}
@@ -210,8 +210,8 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; onS
       >
         {fb.verdict}
       </span>
-      <span className="text-[10px] text-slate-400">{fb.source === 'claude' ? 'Claude AI 採点' : '簡易採点（APIキー未設定）'}</span>
-      {fb.error && <span className="text-[10px] text-rose-500">※AI採点失敗: {fb.error}</span>}
+      <span className="text-[11px] text-slate-400">{fb.source === 'claude' ? 'Claude AI 採点' : '簡易採点（APIキー未設定）'}</span>
+      {fb.error && <span className="text-[11px] text-rose-500">※AI採点失敗: {fb.error}</span>}
     </div>
     <p className="text-slate-800">
       <span className="font-bold text-emerald-700">◎ </span>
@@ -226,11 +226,11 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; onS
         <Volume2 className="h-3.5 w-3.5" />
       </button>
       <div>
-        <div className="text-[10px] font-bold text-emerald-700">こう言えば満点</div>
+        <div className="text-[11px] font-bold text-emerald-700">こう言えば満点</div>
         <div className="font-semibold text-emerald-950">{fb.improvedAnswer}</div>
       </div>
     </div>
-    <p className="flex items-start gap-1 text-[12px] text-slate-600">
+    <p className="flex items-start gap-1 text-[13px] text-slate-600">
       <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
       {fb.tip}
     </p>
@@ -240,7 +240,7 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; onS
 const ModelList: React.FC<{ title: string; items: string[]; onSpeak: (t: string) => Promise<void> }> = ({ title, items, onSpeak }) =>
   items?.length ? (
     <div>
-      <div className="text-[11px] font-bold text-indigo-800">{title}</div>
+      <div className="text-[12px] font-bold text-indigo-800">{title}</div>
       <ul className="mt-0.5 space-y-0.5">
         {items.map((m, i) => (
           <li key={i} className="flex items-start gap-1.5">

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* 文字を少し大きめに（rem 基準のサイズがすべて拡大される） */
+html {
+  font-size: 17px;
+}
+
 @layer utilities {
   .perspective-1000 {
     perspective: 1000px;

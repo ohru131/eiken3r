@@ -84,7 +84,7 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
               {test.state === 'ok' && <span className="text-xs font-bold text-emerald-700">接続OK</span>}
               {test.state === 'ng' && <span className="text-xs font-bold text-rose-600">{test.msg}</span>}
             </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+            <p className="mt-1.5 text-[12px] leading-relaxed text-slate-500">
               キーはこの端末のブラウザ（localStorage）にだけ保存され、採点時にブラウザから直接 Anthropic API へ送信されます。共用PCでは使用後に「キーを削除」してください。キーは{' '}
               <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-indigo-600 underline">
                 Anthropic Console
@@ -93,7 +93,7 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
             </p>
             <ModelSelect label="1問ごとの採点（標準: Haiku 5.5）" value={settings.evalModel} onChange={(v) => set('evalModel', v)} />
             <ModelSelect label="最後の総合講評（標準: Sonnet 5.5）" value={settings.reportModel} onChange={(v) => set('reportModel', v)} />
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-[12px] text-slate-500">
               目安: 面接1回あたり 約0.02ドル（標準設定）。本番モードは面接を止めずに裏で採点するので、待ち時間はほぼありません。
             </p>
           </section>
@@ -195,7 +195,7 @@ const AzureSection: React.FC<{ settings: AppSettings; set: <K extends keyof AppS
         {test.state === 'ok' && <span className="text-xs font-bold text-emerald-700">接続OK</span>}
         {test.state === 'ng' && <span className="text-xs font-bold text-rose-600">{test.msg}</span>}
       </div>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+      <p className="mt-1.5 text-[12px] leading-relaxed text-slate-500">
         設定すると、音読の録音を Azure（Microsoft）に送り、単語ごとの発音・流暢さ・読み落とし・抑揚を評価します。質問への回答は今まで通りブラウザの音声認識です。キーはこのブラウザにだけ保存されます。
         Azure ポータルで「Speech」リソースを作成し、「キーとエンドポイント」のキーとリージョン（例: japaneast）を入力してください。無料枠（F0）で使えます。
       </p>

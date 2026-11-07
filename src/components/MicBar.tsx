@@ -118,7 +118,7 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
               onClick={() => getActiveListen()?.finish()}
               className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1.5 font-bold text-white hover:bg-rose-700"
             >
-              <Check className="h-3.5 w-3.5" /> 回答終了 <kbd className="ml-1 rounded bg-white/20 px-1 text-[10px]">Space</kbd>
+              <Check className="h-3.5 w-3.5" /> 回答終了 <kbd className="ml-1 rounded bg-white/20 px-1 text-[11px]">Space</kbd>
             </button>
           )}
           <button
@@ -138,7 +138,7 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
               <Keyboard className="h-3.5 w-3.5" /> {typing ? '音声で答える' : 'キーボード入力'}
             </button>
           )}
-          {!typing && <span className="w-full text-[11px] text-slate-500">話し終えて少し黙ると自動で次に進みます</span>}
+          {!typing && <span className="w-full text-[12px] text-slate-500">話し終えて少し黙ると自動で次に進みます</span>}
         </div>
       )}
     </div>
