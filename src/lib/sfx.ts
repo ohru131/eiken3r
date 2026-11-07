@@ -117,9 +117,9 @@ export function playSfx(name: SfxName) {
       tone(370, 0.14, 0.3, 'triangle', 0.12);
       break;
     case 'fanfare':
-      [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.13, 0.25, 'triangle', 0.13));
-      tone(1047, 0.55, 0.7, 'triangle', 0.13);
-      tone(1319, 0.55, 0.7, 'sine', 0.08);
+      // 落ち着いた上昇アルペジオ → 柔らかい和音（Cmaj9）
+      [523, 659, 784, 988].forEach((f, i) => tone(f, i * 0.09, 0.35, 'sine', 0.09));
+      [523, 784, 988, 1175, 1568].forEach((f) => tone(f, 0.42, 1.6, 'sine', 0.045));
       break;
     case 'click':
       tone(1200, 0, 0.03, 'square', 0.03);

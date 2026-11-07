@@ -15,6 +15,8 @@ import { ExamCardView } from './components/ExamCardView';
 import { MicBar } from './components/MicBar';
 import { FeedbackPanel } from './components/FeedbackPanel';
 import { ReportView } from './components/ReportView';
+import { Achievement, buildAchievements } from './components/ScoreHero';
+import { cardProgress, passedCardCount, practiceStreak } from './lib/stats';
 import { SettingsModal } from './components/SettingsModal';
 import { StrategyGuideModal } from './components/StrategyGuideModal';
 
@@ -65,6 +67,7 @@ export default function App() {
   const [pending, setPending] = useState<PendingFeedback | null>(null);
   const [report, setReport] = useState<FinalReport | null>(null);
   const [aiPending, setAiPending] = useState(false);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
@@ -175,12 +178,6 @@ export default function App() {
         nextSteps: '',
         source: 'local',
       };
-      setReport(base);
-      setRecords(recs);
-      setPhase('report');
-      setScreen('report');
-      playSfx(passed ? 'fanfare' : 'chime');
-
       const h: HistoryRecord = {
         id: String(Date.now()),
         date: new Date().toLocaleString('ja-JP'),
@@ -190,11 +187,16 @@ export default function App() {
         total,
         passed,
       };
-      setHistory((prev) => {
-        const next = [h, ...prev];
-        saveHistory(next);
-        return next;
-      });
+      const nextHistory = [h, ...history];
+      setAchievements(
+        buildAchievements(base, cardProgress(history, c.id), practiceStreak(nextHistory), passedCardCount(nextHistory), EXAM_CARDS.length)
+      );
+      setHistory(nextHistory);
+      saveHistory(nextHistory);
+      setReport(base);
+      setRecords(recs);
+      setPhase('report');
+      setScreen('report');
 
       setAiPending(useClaude);
       const text = await generateReport(c, recs, scores, attitude, total, PASS_LINE, settings, useClaude);
@@ -264,6 +266,7 @@ export default function App() {
             onRetry={() => start(card)}
             onNext={nextCard}
             onHome={goHome}
+            achievements={achievements}
           />
         )}
 
@@ -363,6 +366,7 @@ export default function App() {
                       stopSpeaking();
                       pending.resolve(a);
                     }}
+                    prevStreak={streakBefore(pending.rec.item, records)}
                   />
                 ) : (
                   <ExamCardView card={card} state={cardState} timer={timer} showTranslation={showJa && settings.mode === 'practice'} />
@@ -377,6 +381,18 @@ export default function App() {
       <StrategyGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </div>
   );
+}
+
+/** この設問の直前まで、4点以上が何問続いているか */
+function streakBefore(item: ScoredItem, records: AnswerRecord[]): number {
+  const order: ScoredItem[] = ['reading', 'q1', 'q2', 'q3', 'q4', 'q5'];
+  let n = 0;
+  for (let i = order.indexOf(item) - 1; i >= 0; i--) {
+    const sc = records.find((r) => r.item === order[i])?.feedback?.score;
+    if (sc !== undefined && sc >= 4) n++;
+    else break;
+  }
+  return n;
 }
 
 const IconToggle: React.FC<{ on: boolean; onClick: () => void; title: string; children: React.ReactNode }> = ({ on, onClick, title, children }) => (
