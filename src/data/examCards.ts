@@ -1,6 +1,7 @@
 import type { ExamCard } from '../types';
+import { EXAM_CARDS_2 } from './examCards2';
 
-export const EXAM_CARDS: ExamCard[] = [
+const BASE_CARDS: ExamCard[] = [
   {
     id: 'card-01',
     title: 'Green Parks in Cities',
@@ -2226,3 +2227,5 @@ export const EXAM_CARDS: ExamCard[] = [
     },
   },
 ];
+
+export const EXAM_CARDS: ExamCard[] = [...BASE_CARDS, ...EXAM_CARDS_2];
