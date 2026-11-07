@@ -91,33 +91,42 @@ export async function runInterview(
   };
 
   /** 音読: Azure 設定があれば発音評価付きで録音。失敗時はブラウザの音声認識 */
-  const hearReading = async (): Promise<ListenResult & { assessment?: ReadingAssessment | null }> => {
+  const hearReading = async (): Promise<ListenResult & { assessment?: ReadingAssessment | null; note?: string }> => {
+    let note: string | undefined;
     if (azureConfigured(settings.azureKey, settings.azureRegion)) {
       playSfx('micOn');
       bridge.setInterim('');
       bridge.setListening(true, 'タイトルから音読しましょう（発音評価中）');
       try {
-        return await listenReadingAzure({
-          key: settings.azureKey,
-          region: settings.azureRegion,
-          referenceText: modelReadingText(card),
-          silenceMs: Math.max(3000, settings.silenceSec * 1500),
-          noSpeechMs: 15000,
-          maxMs: 90000,
-          signal,
-          onInterim: bridge.setInterim,
-          onSilenceProgress: bridge.setSilence,
-        });
-      } catch (e) {
-        if (!(e instanceof AzureUnavailableError)) throw e;
-        console.warn('Azure 発音評価を使えないため通常の音声認識に切り替え:', e.message);
+        // 抑揚評価つき → 失敗したら抑揚なしで再接続
+        for (const prosody of [true, false]) {
+          try {
+            return await listenReadingAzure({
+              key: settings.azureKey,
+              region: settings.azureRegion,
+              referenceText: modelReadingText(card),
+              silenceMs: Math.max(3000, settings.silenceSec * 1500),
+              noSpeechMs: 15000,
+              maxMs: 90000,
+              signal,
+              onInterim: bridge.setInterim,
+              onSilenceProgress: bridge.setSilence,
+              prosody,
+            });
+          } catch (e) {
+            if (!(e instanceof AzureUnavailableError)) throw e;
+            note = e.message;
+            console.warn(`Azure 発音評価に失敗（prosody=${prosody}）:`, e.message);
+          }
+        }
       } finally {
         bridge.setListening(false);
         bridge.setSilence(0);
         playSfx('micOff');
       }
     }
-    return hear('reading', 'タイトルから音読しましょう');
+    const r = await hear('reading', 'タイトルから音読しましょう');
+    return { ...r, note: note ? `${note}（通常の音声認識で採点）` : undefined };
   };
 
   /** 挨拶など採点外のやりとり */
@@ -255,6 +264,7 @@ export async function runInterview(
       latencySec: rd.latencySec,
       pardonUsed: false,
       pronunciation: rd.assessment ?? undefined,
+      pronunciationNote: rd.assessment ? undefined : rd.note,
     };
     records.set('reading', readingRec);
     bridge.upsertRecord(readingRec);
