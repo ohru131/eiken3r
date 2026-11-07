@@ -15,7 +15,7 @@ export const EXAMINERS: ExaminerProfile[] = [
     id: 'brown',
     name: 'Ms. Brown',
     shortName: 'Brown',
-    description: 'イギリス英語。テンポよく進める本番そっくりの面接官。',
+    description: 'イギリス英語。テンポよく進める面接官。',
     color: 'from-emerald-500 to-teal-600',
     voiceHints: ['Google UK English Female', 'Serena', 'Kate', 'Microsoft Libby', 'Microsoft Sonia', 'en-GB', 'en-US'],
     pitch: 1.1,
