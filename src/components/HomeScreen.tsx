@@ -27,14 +27,20 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
   const done = Object.keys(best).length;
   const passedCount = Object.values(best).filter((v) => v >= PASS_LINE).length;
 
+  // ランダム: まだ挑戦していないカード → 合格圏に届いていないカード → 全カード の順に候補を絞る
+  const untried = list.filter((c) => best[c.id] === undefined);
+  const notPassed = list.filter((c) => best[c.id] !== undefined && best[c.id] < PASS_LINE);
+  const randomPool = untried.length ? untried : notPassed.length ? notPassed : list;
+  const randomLabel = untried.length ? `未挑戦からランダム（残り${untried.length}枚）` : notPassed.length ? `合格圏未達からランダム（${notPassed.length}枚）` : 'ランダムで開始';
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 pb-10">
       {/* hero */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-sky-500 p-6 text-white shadow-xl sm:p-8">
-        <div className="text-xs font-bold tracking-widest text-indigo-100">EIKEN GRADE 3 · SPEAKING TEST SIMULATOR</div>
-        <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">本番そっくりの面接を、何度でも。</h2>
+        <div className="text-xs font-bold tracking-widest text-indigo-100">英検3級 二次試験（面接）</div>
+        <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">面接の練習をしよう</h2>
         <p className="mt-2 max-w-2xl text-sm text-indigo-50">
-          入室〜黙読20秒〜音読〜No.1〜5〜退室まで、面接官の声で自動進行。あなたは話すだけ。話し終えて少し黙れば次の質問へ進みます。
+          入室から退室まで、本番と同じ順番で面接官が質問します。答え終わって少し待つと、次の質問に進みます。
         </p>
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold">
           {[
@@ -113,10 +119,10 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
             ))}
           </div>
           <button
-            onClick={() => onStart(list[Math.floor(Math.random() * list.length)])}
+            onClick={() => onStart(randomPool[Math.floor(Math.random() * randomPool.length)])}
             className="inline-flex items-center gap-1 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700"
           >
-            <Shuffle className="h-3.5 w-3.5" /> ランダムで開始
+            <Shuffle className="h-3.5 w-3.5" /> {randomLabel}
           </button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
