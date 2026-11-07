@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Settings, Square, Subtitles, Languages, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { BookOpen, Settings, Square, Subtitles, Languages, Volume2, VolumeX, Sparkles, Maximize, Minimize } from 'lucide-react';
 import { AnswerRecord, AppSettings, ExamCard, FinalReport, HistoryRecord, PhaseId, ScoredItem } from './types';
 import { EXAM_CARDS } from './data/examCards';
 import { EXAMINERS } from './data/examiners';
@@ -52,6 +52,18 @@ export default function App() {
   const [showSubs, setShowSubs] = useState(true);
   const [showJa, setShowJa] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const canFullscreen = typeof document !== 'undefined' && !!document.documentElement.requestFullscreen;
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    else void document.documentElement.requestFullscreen().catch(() => {});
+  };
 
   // interview live state
   const [phase, setPhase] = useState<PhaseId>('idle');
@@ -240,6 +252,16 @@ export default function App() {
             <button onClick={() => setShowSettings(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">
               <Settings className="h-4 w-4" /> <span className="hidden sm:inline">設定</span>
             </button>
+            {canFullscreen && (
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? '全画面表示を終了（Esc）' : '全画面表示'}
+                aria-label={isFullscreen ? '全画面表示を終了' : '全画面表示'}
+                className="rounded-xl p-2 text-slate-700 hover:bg-slate-100"
+              >
+                {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+              </button>
+            )}
           </div>
         </div>
       </header>
