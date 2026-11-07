@@ -16,7 +16,9 @@ export type SceneBackground =
   | 'restaurant'
   | 'gym'
   | 'zoo'
-  | 'hospital';
+  | 'hospital'
+  | 'pool'
+  | 'rink';
 
 /** イラスト内の人物・物。座標は 0-100 (%) */
 export interface SceneItem {

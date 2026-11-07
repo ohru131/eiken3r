@@ -23,7 +23,7 @@ const ProgressPanel: React.FC<{ history: HistoryRecord[]; total: number; passed:
     <div className="w-full rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur lg:w-80">
       <div className="flex items-end justify-between">
         <div>
-          <div className="flex items-center gap-1 text-[11px] font-bold text-indigo-100">
+          <div className="flex items-center gap-1 text-[12px] font-bold text-indigo-100">
             <Flame className={`h-3.5 w-3.5 ${streak ? 'text-amber-300' : 'text-indigo-200'}`} /> 連続練習
           </div>
           <div className="text-3xl font-black tabular-nums">
@@ -31,7 +31,7 @@ const ProgressPanel: React.FC<{ history: HistoryRecord[]; total: number; passed:
             <span className="ml-0.5 text-sm font-bold opacity-70">日</span>
           </div>
         </div>
-        <div className="text-right text-[11px] text-indigo-100">
+        <div className="text-right text-[12px] text-indigo-100">
           <div>
             今週 <span className="text-base font-black text-white">{week}</span> 回
           </div>
@@ -42,7 +42,7 @@ const ProgressPanel: React.FC<{ history: HistoryRecord[]; total: number; passed:
         </div>
       </div>
       <div className="mt-3">
-        <div className="flex justify-between text-[11px] font-bold text-indigo-100">
+        <div className="flex justify-between text-[12px] font-bold text-indigo-100">
           <span>合格圏のカード</span>
           <span className="tabular-nums text-white">
             {passed} / {total}
@@ -57,7 +57,7 @@ const ProgressPanel: React.FC<{ history: HistoryRecord[]; total: number; passed:
           />
         </div>
       </div>
-      <div className="mt-2.5 text-[11px] text-indigo-100">
+      <div className="mt-2.5 text-[12px] text-indigo-100">
         {today
           ? '今日の練習は完了。この調子で続けよう。'
           : streak
@@ -128,7 +128,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
         <p className="mt-2 max-w-2xl text-sm text-indigo-50">
           入室から退室まで、本番と同じ順番で面接官が質問します。答え終わって少し待つと、次の質問に進みます。
         </p>
-        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold">
+        <div className="mt-4 flex flex-wrap gap-2 text-[12px] font-bold">
           {[
             [Mic, 'マイクで回答・自動送信'],
             [Timer, '黙読20秒タイマー'],
@@ -181,7 +181,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
               >
                 <div className={`mb-1 h-1.5 w-8 rounded-full bg-gradient-to-r ${e.color}`} />
                 <div className="text-xs font-black text-slate-900">{e.name}</div>
-                <div className="mt-0.5 text-[10px] leading-snug text-slate-500">{e.description}</div>
+                <div className="mt-0.5 text-[11px] leading-snug text-slate-500">{e.description}</div>
               </button>
             ))}
           </div>
@@ -242,17 +242,17 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
               className={`group flex flex-col rounded-2xl border-2 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md ${STATUS_CARD[st]}`}
             >
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black text-slate-400">#{String(cards.indexOf(c) + 1).padStart(2, '0')}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${LEVEL_COLOR[c.level]}`}>{LEVEL_LABEL[c.level]}</span>
-                <span className="text-[10px] text-slate-500">{c.category}</span>
-                <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${STATUS_BADGE[st]}`}>
+                <span className="text-[11px] font-black text-slate-400">#{String(cards.indexOf(c) + 1).padStart(2, '0')}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${LEVEL_COLOR[c.level]}`}>{LEVEL_LABEL[c.level]}</span>
+                <span className="text-[11px] text-slate-500">{c.category}</span>
+                <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-black ${STATUS_BADGE[st]}`}>
                   {st === 'untried' ? '未挑戦' : `${STATUS_LABEL[st]} ${best[c.id]}点`}
                 </span>
               </div>
               <div className="mt-2 font-serif text-lg font-bold text-slate-900">{c.title}</div>
               <div className="text-xs text-slate-500">{c.japaneseTitle}</div>
               {st !== 'untried' && (
-                <div className="mt-1 text-[10px] text-slate-500">
+                <div className="mt-1 text-[11px] text-slate-500">
                   挑戦 {attempts[c.id]}回{st === 'almost' ? ` · 合格目安まであと${PASS_LINE - best[c.id]}点` : ''}
                 </div>
               )}
@@ -274,7 +274,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
               .reverse()
               .map((h) => (
                 <div key={h.id} className="flex w-8 shrink-0 flex-col items-center" title={`${h.date} ${h.cardTitle} ${h.total}点`}>
-                  <div className="text-[10px] font-bold text-slate-600">{h.total}</div>
+                  <div className="text-[11px] font-bold text-slate-600">{h.total}</div>
                   <div className={`w-5 rounded-t ${h.passed ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ height: `${(h.total / 33) * 80}px` }} />
                 </div>
               ))}
@@ -300,6 +300,6 @@ const ModeBtn: React.FC<{ active: boolean; onClick: () => void; icon: React.Reac
       {icon}
       {title}
     </div>
-    <div className="mt-1 text-[11px] leading-snug text-slate-500">{desc}</div>
+    <div className="mt-1 text-[12px] leading-snug text-slate-500">{desc}</div>
   </button>
 );

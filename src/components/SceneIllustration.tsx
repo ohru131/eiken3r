@@ -7,12 +7,21 @@ interface BgDef {
   floor: string;
   floorY: number; // %
   decor?: React.ReactNode;
+  /** 床の上に描く（プールの水など） */
+  overlay?: React.ReactNode;
 }
 
 const cloud = (x: number, y: number) => (
   <g fill="#ffffff" opacity="0.9">
     <ellipse cx={x} cy={y} rx="26" ry="11" />
     <ellipse cx={x + 18} cy={y - 7} rx="18" ry="10" />
+  </g>
+);
+const clock = (cx: number, cy: number, r = 15) => (
+  <g>
+    <circle cx={cx} cy={cy} r={r} fill="#fff" stroke="#64748b" strokeWidth="3" />
+    <line x1={cx} y1={cy} x2={cx} y2={cy - r * 0.6} stroke="#334155" strokeWidth="2" strokeLinecap="round" />
+    <line x1={cx} y1={cy} x2={cx + r * 0.45} y2={cy} stroke="#334155" strokeWidth="2" strokeLinecap="round" />
   </g>
 );
 const windowEl = (x: number, y: number) => (
@@ -123,8 +132,8 @@ const BG: Record<SceneBackground, BgDef> = {
     decor: (
       <>
         {windowEl(40, 30)}
-        <rect x="250" y="40" width="60" height="45" fill="#fff" stroke="#a78bfa" strokeWidth="4" />
-        <circle cx="360" cy="60" r="16" fill="#fff" stroke="#64748b" strokeWidth="3" />
+        <rect x="240" y="40" width="74" height="46" rx="4" fill="#1e293b" /><rect x="245" y="45" width="64" height="36" rx="2" fill="#334155" /><rect x="268" y="86" width="18" height="8" fill="#475569" />
+        {clock(360, 60, 16)}
       </>
     ),
   },
@@ -136,7 +145,7 @@ const BG: Record<SceneBackground, BgDef> = {
     decor: (
       <>
         <rect x="90" y="20" width="220" height="70" rx="4" fill="#166534" stroke="#a16207" strokeWidth="5" />
-        <circle cx="360" cy="40" r="15" fill="#fff" stroke="#64748b" strokeWidth="3" />
+        {clock(360, 40, 15)}
         {windowEl(5, 30)}
       </>
     ),
@@ -171,9 +180,15 @@ const BG: Record<SceneBackground, BgDef> = {
     floorY: 70,
     decor: (
       <>
-        <rect x="0" y="20" width="400" height="22" fill="#f472b6" />
+        <rect x="0" y="18" width="400" height="22" fill="#f472b6" />
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+          <path key={i} d={`M${i * 40},40 q20,14 40,0`} fill="#fbcfe8" />
+        ))}
         {[20, 140, 260].map((x) => (
-          <rect key={x} x={x} y="60" width="110" height="60" fill="#fff" stroke="#f9a8d4" strokeWidth="3" />
+          <g key={x}>
+            <rect x={x} y="62" width="110" height="80" fill="#fff" stroke="#f9a8d4" strokeWidth="3" />
+            <line x1={x} y1="102" x2={x + 110} y2="102" stroke="#f9a8d4" strokeWidth="3" />
+          </g>
         ))}
       </>
     ),
@@ -187,7 +202,7 @@ const BG: Record<SceneBackground, BgDef> = {
       <>
         
         <rect x="230" y="30" width="160" height="110" fill="#f1f5f9" stroke="#94a3b8" />
-        <circle cx="310" cy="55" r="12" fill="#fff" stroke="#64748b" strokeWidth="3" />
+        {clock(310, 55, 12)}
         {[245, 285, 325, 355].map((x) => (
           <rect key={x} x={x} y="85" width="24" height="20" fill="#bae6fd" />
         ))}
@@ -201,8 +216,11 @@ const BG: Record<SceneBackground, BgDef> = {
     floorY: 66,
     decor: (
       <>
-        <rect x="170" y="30" width="60" height="40" fill="#fff" stroke="#334155" strokeWidth="3" />
-        <circle cx="200" cy="78" r="12" fill="none" stroke="#ef4444" strokeWidth="3" />
+        <rect x="170" y="26" width="60" height="40" fill="#fff" stroke="#334155" strokeWidth="3" />
+        <rect x="190" y="44" width="20" height="14" fill="none" stroke="#ef4444" strokeWidth="2" />
+        <ellipse cx="200" cy="70" rx="13" ry="4" fill="none" stroke="#ef4444" strokeWidth="3" />
+        <path d="M187,70 l4,14 h18 l4,-14 M193,70 l2,14 M207,70 l-2,14" stroke="#cbd5e1" strokeWidth="1.5" fill="none" />
+        <line x1="0" y1="200" x2="400" y2="200" stroke="#fde68a" strokeWidth="2" opacity="0.7" />
       </>
     ),
   },
@@ -218,6 +236,42 @@ const BG: Record<SceneBackground, BgDef> = {
           <rect key={i} x={i * 20 + 4} y="110" width="5" height="50" fill="#78716c" />
         ))}
         <rect x="0" y="110" width="400" height="5" fill="#78716c" />
+      </>
+    ),
+  },
+  pool: {
+    top: '#e0f2fe',
+    bottom: '#f0f9ff',
+    floor: '#e2e8f0',
+    floorY: 58,
+    decor: (
+      <>
+        {windowEl(30, 26)}
+        {windowEl(300, 26)}
+      </>
+    ),
+    overlay: (
+      <>
+        <rect x="0" y="150" width="400" height="90" fill="#38bdf8" />
+        <rect x="0" y="150" width="400" height="6" fill="#0ea5e9" />
+        {[175, 200, 225].map((y) => (
+          <line key={y} x1="0" y1={y} x2="400" y2={y} stroke="#f87171" strokeWidth="2" strokeDasharray="8 6" />
+        ))}
+        <path d="M0,190 q25,-6 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 t50,0 t50,0" stroke="#bae6fd" strokeWidth="2" fill="none" />
+      </>
+    ),
+  },
+  rink: {
+    top: '#dbeafe',
+    bottom: '#eff6ff',
+    floor: '#f1f5f9',
+    floorY: 60,
+    decor: (
+      <>
+        <rect x="0" y="122" width="400" height="22" fill="#1d4ed8" />
+        <rect x="0" y="122" width="400" height="4" fill="#93c5fd" />
+        <ellipse cx="200" cy="200" rx="60" ry="16" fill="none" stroke="#93c5fd" strokeWidth="2" />
+        <line x1="200" y1="150" x2="200" y2="240" stroke="#fca5a5" strokeWidth="2" />
       </>
     ),
   },
@@ -237,11 +291,72 @@ const BG: Record<SceneBackground, BgDef> = {
   },
 };
 
+// ---- 家具（絵文字にないもの）: emoji に '[table]' '[bench]' と書くと SVG で描く ----
+const Furniture: React.FC<{ kind: string }> = ({ kind }) =>
+  kind === '[table]' ? (
+    <svg viewBox="0 0 120 50" style={{ width: '2.6em', height: '1.08em', display: 'block' }} aria-hidden>
+      <rect x="4" y="4" width="112" height="9" rx="2" fill="#b45309" />
+      <rect x="4" y="11" width="112" height="4" fill="#92400e" />
+      <rect x="12" y="15" width="7" height="34" fill="#92400e" />
+      <rect x="101" y="15" width="7" height="34" fill="#92400e" />
+    </svg>
+  ) : kind === '[bench]' ? (
+    <svg viewBox="0 0 120 56" style={{ width: '2.5em', height: '1.17em', display: 'block' }} aria-hidden>
+      <rect x="6" y="2" width="108" height="7" rx="2" fill="#a16207" />
+      <rect x="6" y="12" width="108" height="7" rx="2" fill="#a16207" />
+      <rect x="2" y="22" width="116" height="8" rx="2" fill="#ca8a04" />
+      <rect x="12" y="30" width="7" height="26" fill="#57534e" />
+      <rect x="101" y="30" width="7" height="26" fill="#57534e" />
+    </svg>
+  ) : null;
+
+// ---- 人物: 顔の絵文字の下に簡単な体を描き、「何をしているか」を分かりやすくする ----
+const PERSON_HEADS = ['👦', '👧', '👨', '👩', '🧒', '🧑', '👴', '👵', '👱', '🧓'];
+const SHIRTS = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed', '#0891b2', '#db2777'];
+
+function personInfo(emoji: string) {
+  const first = Array.from(emoji)[0];
+  if (!PERSON_HEADS.includes(first)) return null;
+  const female = ['👧', '👩', '👵'].includes(first) || emoji.includes('♀');
+  const child = ['👦', '👧', '🧒'].includes(first);
+  return { female, child };
+}
+
+const Body: React.FC<{ female: boolean; child: boolean; color: string }> = ({ female, child, color }) => (
+  <svg viewBox="0 0 40 52" style={{ width: '0.82em', height: child ? '0.95em' : '1.15em', marginTop: '-0.12em', display: 'block' }} aria-hidden>
+    {/* arms */}
+    <path d="M10,6 Q3,16 6,26" stroke={color} strokeWidth="6" strokeLinecap="round" fill="none" />
+    <path d="M30,6 Q38,14 36,24" stroke={color} strokeWidth="6" strokeLinecap="round" fill="none" />
+    <circle cx="6" cy="27" r="3.2" fill="#f5c9a0" />
+    <circle cx="36" cy="25" r="3.2" fill="#f5c9a0" />
+    {/* torso */}
+    <rect x="9" y="2" width="22" height="24" rx="7" fill={color} />
+    {female ? <path d="M9,22 L5,36 L35,36 L31,22 Z" fill={color} opacity="0.85" /> : null}
+    {/* legs */}
+    <rect x="12" y={female ? 34 : 24} width="6" height={female ? 14 : 24} rx="2" fill={female ? '#f5c9a0' : '#334155'} />
+    <rect x="22" y={female ? 34 : 24} width="6" height={female ? 14 : 24} rx="2" fill={female ? '#f5c9a0' : '#334155'} />
+    <ellipse cx="15" cy="49" rx="5" ry="2.6" fill="#1f2937" />
+    <ellipse cx="25" cy="49" rx="5" ry="2.6" fill="#1f2937" />
+  </svg>
+);
+
+const Thought: React.FC<{ emoji: string }> = ({ emoji }) => (
+  <div className="absolute left-1/2 top-0 -translate-y-[95%] translate-x-[5%]" style={{ fontSize: '0.5em' }}>
+    <div className="rounded-[1em] border-[0.08em] border-slate-700 bg-white px-[0.3em] py-[0.15em] leading-none shadow-sm">{emoji}</div>
+    <div className="absolute -bottom-[0.32em] left-[0.25em] h-[0.22em] w-[0.22em] rounded-full border-[0.05em] border-slate-700 bg-white" />
+    <div className="absolute -bottom-[0.6em] left-[0.05em] h-[0.14em] w-[0.14em] rounded-full border-[0.04em] border-slate-700 bg-white" />
+  </div>
+);
+
 export const SceneIllustration: React.FC<{ scene: Scene; className?: string }> = ({ scene, className = '' }) => {
   const bg = BG[scene.background] || BG.park;
   const floorTop = (bg.floorY / 100) * 240;
+  let personIdx = 0;
   return (
-    <div className={`relative w-full aspect-[5/3] overflow-hidden rounded-xl border-2 border-slate-800/80 bg-white ${className}`}>
+    <div
+      className={`relative w-full aspect-[5/3] overflow-hidden rounded-xl border-2 border-slate-800/80 bg-white ${className}`}
+      style={{ containerType: 'inline-size' }}
+    >
       <svg viewBox="0 0 400 240" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
         <defs>
           <linearGradient id={`sky-${scene.background}`} x1="0" y1="0" x2="0" y2="1">
@@ -250,40 +365,53 @@ export const SceneIllustration: React.FC<{ scene: Scene; className?: string }> =
           </linearGradient>
         </defs>
         <rect width="400" height="240" fill={`url(#sky-${scene.background})`} />
-        {bg.decor}
+        {/* 背景の小物は少し薄く（問題の対象物を目立たせる） */}
+        <g opacity="0.7">{bg.decor}</g>
         <rect x="0" y={floorTop} width="400" height={240 - floorTop} fill={bg.floor} />
         <rect x="0" y={floorTop} width="400" height="3" fill="#000" opacity="0.08" />
+        {bg.overlay}
       </svg>
-      {scene.items.map((it, i) => (
-        <div
-          key={i}
-          className="absolute select-none"
-          style={{
-            left: `${it.x}%`,
-            top: `${it.y}%`,
-            transform: `translate(-50%, -50%)`,
-            zIndex: Math.round(it.y),
-          }}
-        >
+      {scene.items.map((it, i) => {
+        const person = personInfo(it.emoji);
+        const furniture = it.emoji.startsWith('[');
+        const size = (it.size ?? 3) * (person ? 2.75 : 3.2);
+        const onGround = it.y >= bg.floorY - 6;
+        const color = SHIRTS[(personIdx++ * 3 + scene.items.length) % SHIRTS.length];
+        return (
           <div
-            className="leading-none drop-shadow-[0_2px_1px_rgba(0,0,0,0.25)]"
-            style={{ fontSize: `clamp(1rem, ${(it.size ?? 3) * 1.7}vmin, ${it.size ?? 3}rem)`, transform: it.flip ? 'scaleX(-1)' : undefined }}
+            key={i}
+            className="absolute select-none"
+            style={{
+              left: `${it.x}%`,
+              top: `${it.y}%`,
+              // 人物は「胴体の中心」が指定位置に来るように（手元の小物と並ぶ）
+              transform: person ? 'translate(-50%, -62%)' : 'translate(-50%, -50%)',
+              // 家具は奥（上に物を置いたり、下に物を置いたりできるように）
+              zIndex: furniture ? 5 : Math.round(it.y) + (person ? 1 : 0),
+              fontSize: `${size}cqw`,
+            }}
           >
-            {it.emoji}
-          </div>
-          {it.thought && (
-            <div className="absolute -top-2 left-1/2 -translate-y-full translate-x-1">
-              <div className="relative rounded-full border-2 border-slate-700 bg-white px-1.5 py-0.5 text-[clamp(0.8rem,3vmin,1.5rem)] leading-none shadow">
-                {it.thought}
-              </div>
-              <div className="absolute -bottom-1.5 left-1 h-1.5 w-1.5 rounded-full border border-slate-700 bg-white" />
+            <div className="relative flex flex-col items-center" style={{ transform: it.flip ? 'scaleX(-1)' : undefined }}>
+              {(person || (onGround && !furniture)) && (
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 rounded-[50%] bg-black/15 blur-[1px]"
+                  style={{ bottom: person ? '-0.04em' : '-0.02em', width: person ? '0.8em' : '0.75em', height: '0.14em' }}
+                />
+              )}
+              {furniture ? (
+                <Furniture kind={it.emoji} />
+              ) : (
+                <div className="relative leading-none drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">{it.emoji}</div>
+              )}
+              {person && <Body female={person.female} child={person.child} color={color} />}
             </div>
-          )}
-          {it.label && (
-            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded bg-slate-900 px-1 text-[10px] font-bold text-white">{it.label}</div>
-          )}
-        </div>
-      ))}
+            {it.thought && <Thought emoji={it.thought} />}
+            {it.label && (
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded bg-slate-900 px-1 text-[11px] font-bold text-white">{it.label}</div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };

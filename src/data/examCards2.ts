@@ -839,10 +839,9 @@ export const EXAM_CARDS_2: ExamCard[] = [
         { emoji: '🥚', x: 46, y: 76, size: 1.8 },
         { emoji: '🪑', x: 70, y: 74, size: 3.4 },
         { emoji: '🐱', x: 70, y: 83, size: 2 },
-        { emoji: '🧊', x: 90, y: 62, size: 3.6 },
       ],
       description:
-        'In a kitchen, a girl is standing next to a mixing bowl and an egg on the counter and is going to make a cake (thought bubble shows a cake). A cat is under the chair in the middle right. A refrigerator is on the far right.',
+        'In a kitchen, a girl is holding a mixing bowl with an egg next to her and is going to make a cake (thought bubble shows a cake). A cat is under the chair in the middle right.',
     },
     q1: {
       text: 'Please look at the passage. How can people make cakes at home?',
@@ -950,7 +949,7 @@ export const EXAM_CARDS_2: ExamCard[] = [
       { word: 'practice', meaning: '練習する' },
     ],
     scene: {
-      background: 'gym',
+      background: 'rink',
       items: [
         { emoji: '👦', x: 28, y: 68, size: 3.6 },
         { emoji: '⛸️', x: 28, y: 82, size: 2 },

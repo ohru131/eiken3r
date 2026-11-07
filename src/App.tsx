@@ -235,12 +235,12 @@ export default function App() {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-black text-white">3級</div>
             <div className="text-left">
               <div className="text-sm font-black leading-tight sm:text-base">英検3級 面接シミュレーター</div>
-              <div className="hidden text-[10px] text-slate-500 sm:block">2次試験（スピーキング）本番形式トレーニング</div>
+              <div className="hidden text-[11px] text-slate-500 sm:block">2次試験（スピーキング）本番形式トレーニング</div>
             </div>
           </button>
           <div className="ml-auto flex items-center gap-1.5">
             <span
-              className={`hidden items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold sm:inline-flex ${
+              className={`hidden items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold sm:inline-flex ${
                 useClaude ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
               }`}
             >
@@ -293,10 +293,10 @@ export default function App() {
         )}
 
         {screen === 'interview' && (
-          <div className="flex flex-1 flex-col gap-3">
+          <div className="flex flex-1 flex-col gap-3 lg:h-[calc(100dvh-3.5rem-2.75rem)] lg:min-h-0 lg:flex-none">
             {/* progress */}
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-              <span className={`rounded-md px-2 py-0.5 text-[10px] font-black ${settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
+              <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
                 {settings.mode === 'exam' ? '本番' : '練習'}
               </span>
               <div className="flex flex-1 items-center gap-1 overflow-x-auto">
@@ -309,7 +309,7 @@ export default function App() {
                     <React.Fragment key={s.label}>
                       {i > 0 && <div className={`h-0.5 w-2 shrink-0 sm:w-4 ${done || active ? 'bg-indigo-400' : 'bg-slate-200'}`} />}
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[12px] font-bold ${
                           active ? 'bg-indigo-600 text-white shadow' : done ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
                         }`}
                       >
@@ -321,18 +321,18 @@ export default function App() {
               </div>
               <button
                 onClick={goHome}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-bold text-rose-600 hover:bg-rose-50"
               >
                 <Square className="h-3 w-3" /> 中断
               </button>
             </div>
 
-            <div className="grid flex-1 gap-3 lg:grid-cols-12">
+            <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-12">
               {/* examiner side */}
-              <div className="flex flex-col gap-3 lg:col-span-5">
+              <div className="flex flex-col gap-3 lg:col-span-5 lg:min-h-0 lg:overflow-y-auto">
                 <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-200 to-slate-100 shadow-sm">
                   <div className="absolute left-3 top-3 z-10 flex items-center gap-1">
-                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold text-slate-700">{examiner.name}</span>
+                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-bold text-slate-700">{examiner.name}</span>
                   </div>
                   <div className="absolute right-3 top-3 z-10 flex gap-1">
                     <IconToggle on={showSubs} onClick={() => setShowSubs((v) => !v)} title="英語字幕">
@@ -374,7 +374,7 @@ export default function App() {
               </div>
 
               {/* card / feedback side */}
-              <div className="min-h-[420px] lg:col-span-7">
+              <div className="min-h-[420px] lg:col-span-7 lg:h-full lg:min-h-0">
                 {pending ? (
                   <FeedbackPanel
                     key={pending.rec.item + pending.rec.answer}

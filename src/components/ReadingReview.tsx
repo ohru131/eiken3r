@@ -19,9 +19,9 @@ export const ModelReading: React.FC<{ card: ExamCard; onSpeak: (t: string) => Pr
       >
         <Volume2 className="h-3.5 w-3.5" /> お手本音読を聞く
       </button>
-      <span className="text-[11px] text-sky-800">区切りと強弱をまねして、もう一度声に出してみましょう</span>
+      <span className="text-[12px] text-sky-800">区切りと強弱をまねして、もう一度声に出してみましょう</span>
     </div>
-    <div className="font-serif text-[15px] leading-relaxed text-slate-900">
+    <div className="font-serif text-[16px] leading-relaxed text-slate-900">
       <span className="font-bold">{card.title}.</span> {card.passage}
     </div>
   </div>
@@ -29,7 +29,7 @@ export const ModelReading: React.FC<{ card: ExamCard; onSpeak: (t: string) => Pr
 
 const Bar: React.FC<{ label: string; value: number | null }> = ({ label, value }) => (
   <div>
-    <div className="flex justify-between text-[11px] font-bold text-slate-600">
+    <div className="flex justify-between text-[12px] font-bold text-slate-600">
       <span>{label}</span>
       <span className="tabular-nums text-slate-900">{value ?? '—'}</span>
     </div>
@@ -47,7 +47,7 @@ export const PronunciationView: React.FC<{ a: ReadingAssessment; onSpeak: (t: st
   <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3">
     <div className="mb-2 flex items-center gap-1.5 text-xs font-black text-violet-900">
       <Mic2 className="h-3.5 w-3.5" /> 発音評価（Azure）
-      <span className="ml-auto rounded-full bg-violet-600 px-2 py-0.5 text-[11px] text-white">総合 {a.overall}</span>
+      <span className="ml-auto rounded-full bg-violet-600 px-2 py-0.5 text-[12px] text-white">総合 {a.overall}</span>
     </div>
     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
       <Bar label="発音の正確さ" value={a.accuracy} />
@@ -55,7 +55,7 @@ export const PronunciationView: React.FC<{ a: ReadingAssessment; onSpeak: (t: st
       <Bar label="読み切り" value={a.completeness} />
       <Bar label="抑揚・リズム" value={a.prosody} />
     </div>
-    <div className="mt-3 font-serif text-[15px] leading-loose">
+    <div className="mt-3 font-serif text-[16px] leading-loose">
       {a.words.map((w, i) => (
         <React.Fragment key={i}>
           <button
@@ -68,7 +68,7 @@ export const PronunciationView: React.FC<{ a: ReadingAssessment; onSpeak: (t: st
         </React.Fragment>
       ))}
     </div>
-    <div className="mt-1.5 flex flex-wrap gap-3 text-[10px] text-slate-500">
+    <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-slate-500">
       <span>
         <span className="rounded bg-amber-100 px-1">黄</span> やや不明瞭
       </span>
@@ -78,13 +78,13 @@ export const PronunciationView: React.FC<{ a: ReadingAssessment; onSpeak: (t: st
       <span className="line-through">灰</span> 読み落とし
       <span>単語をタップすると発音を聞けます</span>
     </div>
-    {a.insertions.length > 0 && <div className="mt-1 text-[11px] text-slate-500">本文にない語: {a.insertions.join(', ')}</div>}
+    {a.insertions.length > 0 && <div className="mt-1 text-[12px] text-slate-500">本文にない語: {a.insertions.join(', ')}</div>}
   </div>
 );
 
 /** 発音評価ができなかった時の理由表示 */
 export const PronunciationNote: React.FC<{ note: string }> = ({ note }) => (
-  <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-[12px] text-amber-900">
+  <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900">
     <div className="flex items-center gap-1 font-black">
       <Mic2 className="h-3.5 w-3.5" /> 発音評価（Azure）ができませんでした
     </div>

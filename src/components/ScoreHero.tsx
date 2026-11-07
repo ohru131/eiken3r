@@ -134,7 +134,7 @@ export const ScoreHero: React.FC<{ card: ExamCard; report: FinalReport; achievem
                   initial={{ opacity: 0, y: 6, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ delay: 1.7 + i * 0.15, duration: 0.35 }}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${TONE[a.tone]}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-bold ${TONE[a.tone]}`}
                 >
                   {a.icon}
                   {a.text}
@@ -153,10 +153,10 @@ export const ScoreHero: React.FC<{ card: ExamCard; report: FinalReport; achievem
                   transition={{ delay: 0.3 + i * 0.08 }}
                   className={`rounded-lg px-1 py-1.5 ${x.v === x.max ? 'bg-amber-400/15 ring-1 ring-amber-300/40' : 'bg-white/10'}`}
                 >
-                  <div className="text-[10px] opacity-60">{x.label}</div>
+                  <div className="text-[11px] opacity-60">{x.label}</div>
                   <div className={`text-lg font-black ${x.v === x.max ? 'text-amber-200' : ''}`}>
                     {x.v}
-                    <span className="text-[10px] font-normal opacity-50">/{x.max}</span>
+                    <span className="text-[11px] font-normal opacity-50">/{x.max}</span>
                   </div>
                 </motion.div>
               )
