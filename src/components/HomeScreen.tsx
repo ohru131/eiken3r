@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { practiceStreak, practicedToday, recentAverage, weekCount } from '../lib/stats';
+import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame } from 'lucide-react';
 import { AppSettings, ExamCard, HistoryRecord, InterviewMode } from '../types';
 import { EXAMINERS } from '../data/examiners';
 import { PASS_LINE } from '../lib/scoring';
@@ -11,6 +13,60 @@ interface Props {
   onSettings: (s: AppSettings) => void;
   onStart: (card: ExamCard) => void;
 }
+
+const ProgressPanel: React.FC<{ history: HistoryRecord[]; total: number; passed: number }> = ({ history, total, passed }) => {
+  const streak = practiceStreak(history);
+  const today = practicedToday(history);
+  const week = weekCount(history);
+  const avg = recentAverage(history);
+  return (
+    <div className="w-full rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur lg:w-80">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="flex items-center gap-1 text-[11px] font-bold text-indigo-100">
+            <Flame className={`h-3.5 w-3.5 ${streak ? 'text-amber-300' : 'text-indigo-200'}`} /> 連続練習
+          </div>
+          <div className="text-3xl font-black tabular-nums">
+            {streak}
+            <span className="ml-0.5 text-sm font-bold opacity-70">日</span>
+          </div>
+        </div>
+        <div className="text-right text-[11px] text-indigo-100">
+          <div>
+            今週 <span className="text-base font-black text-white">{week}</span> 回
+          </div>
+          <div>
+            直近平均 <span className="text-base font-black text-white">{avg ?? '—'}</span>
+            {avg !== null && <span className="opacity-70"> / 33</span>}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3">
+        <div className="flex justify-between text-[11px] font-bold text-indigo-100">
+          <span>合格圏のカード</span>
+          <span className="tabular-nums text-white">
+            {passed} / {total}
+          </span>
+        </div>
+        <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/15">
+          <motion.div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-300 to-teal-200"
+            initial={{ width: 0 }}
+            animate={{ width: `${(passed / total) * 100}%` }}
+            transition={{ duration: 1, delay: 0.2, ease: 'easeOut' }}
+          />
+        </div>
+      </div>
+      <div className="mt-2.5 text-[11px] text-indigo-100">
+        {today
+          ? '今日の練習は完了。この調子で続けよう。'
+          : streak
+            ? `今日1回やれば ${streak + 1}日連続。`
+            : 'まずは1枚。今日から記録をつけよう。'}
+      </div>
+    </div>
+  );
+};
 
 const LEVEL_LABEL = { basic: '基礎', standard: '標準', challenge: '発展' } as const;
 const LEVEL_COLOR = { basic: 'bg-sky-100 text-sky-800', standard: 'bg-indigo-100 text-indigo-800', challenge: 'bg-fuchsia-100 text-fuchsia-800' } as const;
@@ -65,7 +121,8 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 pb-10">
       {/* hero */}
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-sky-500 p-6 text-white shadow-xl sm:p-8">
+      <section className="flex flex-col gap-5 overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-sky-500 p-6 text-white shadow-xl sm:p-8 lg:flex-row lg:items-center">
+        <div className="flex-1">
         <div className="text-xs font-bold tracking-widest text-indigo-100">英検3級 二次試験（面接）</div>
         <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">面接の練習をしよう</h2>
         <p className="mt-2 max-w-2xl text-sm text-indigo-50">
@@ -86,6 +143,8 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
             );
           })}
         </div>
+        </div>
+        <ProgressPanel history={history} total={cards.length} passed={passedCount} />
       </section>
 
       {/* mode + examiner */}

@@ -4,6 +4,7 @@ import { AnswerRecord, ExamCard, FinalReport, ScoredItem } from '../types';
 import { ITEM_LABELS, PASS_LINE } from '../lib/scoring';
 import { FeedbackBody, ScoreDots } from './FeedbackPanel';
 import { ModelReading, PronunciationView } from './ReadingReview';
+import { Achievement, ScoreHero } from './ScoreHero';
 
 interface Props {
   card: ExamCard;
@@ -14,11 +15,12 @@ interface Props {
   onRetry: () => void;
   onNext: () => void;
   onHome: () => void;
+  achievements: Achievement[];
 }
 
 const ORDER: ScoredItem[] = ['reading', 'q1', 'q2', 'q3', 'q4', 'q5'];
 
-export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, onSpeak, onRetry, onNext, onHome }) => {
+export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, onSpeak, onRetry, onNext, onHome, achievements }) => {
   const [open, setOpen] = useState<ScoredItem | null>(null);
   if (!report) {
     return (
@@ -28,61 +30,9 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
       </div>
     );
   }
-  const pct = report.total / 33;
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4 pb-10">
-      {/* score hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 to-indigo-900 p-6 text-white shadow-xl sm:p-8">
-        <div className="flex flex-col items-center gap-6 sm:flex-row">
-          <div className="relative h-40 w-40 shrink-0">
-            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-              <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="12" />
-              <circle
-                cx="60"
-                cy="60"
-                r="52"
-                fill="none"
-                stroke={report.passed ? '#34d399' : '#fb7185'}
-                strokeWidth="12"
-                strokeLinecap="round"
-                strokeDasharray={327}
-                strokeDashoffset={327 * (1 - pct)}
-                className="transition-all duration-1000"
-              />
-              <circle cx="60" cy="60" r="52" fill="none" stroke="#fff" strokeWidth="2" strokeDasharray="1.5 325.5" strokeDashoffset={-327 * (PASS_LINE / 33)} />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-5xl font-black tabular-nums">{report.total}</div>
-              <div className="text-xs opacity-70">/ 33点</div>
-            </div>
-          </div>
-          <div className="flex-1 text-center sm:text-left">
-            <div className="text-xs font-bold tracking-widest text-indigo-200">{card.title}</div>
-            <div
-              className={`mt-1 inline-block -rotate-3 rounded-lg border-4 px-4 py-1 text-3xl font-black ${
-                report.passed ? 'border-emerald-400 text-emerald-300' : 'border-rose-400 text-rose-300'
-              }`}
-            >
-              {report.passed ? '合格圏' : 'あと少し'}
-            </div>
-            <p className="mt-3 text-sm text-indigo-100">
-              合格目安 {PASS_LINE}点（約6割）{report.passed ? `を ${report.total - PASS_LINE}点 上回っています。` : `まで あと ${PASS_LINE - report.total}点。`}
-            </p>
-            <div className="mt-4 grid grid-cols-4 gap-2 text-center sm:grid-cols-7">
-              {ORDER.map((k) => (
-                <div key={k} className="rounded-lg bg-white/10 px-1 py-1.5">
-                  <div className="text-[10px] opacity-70">{ITEM_LABELS[k].split(' ')[0]}</div>
-                  <div className="text-lg font-black">{report.scores[k]}</div>
-                </div>
-              ))}
-              <div className="rounded-lg bg-white/10 px-1 py-1.5">
-                <div className="text-[10px] opacity-70">態度</div>
-                <div className="text-lg font-black">{report.attitude}<span className="text-xs opacity-60">/3</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ScoreHero card={card} report={report} achievements={achievements} />
 
       {/* summary */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

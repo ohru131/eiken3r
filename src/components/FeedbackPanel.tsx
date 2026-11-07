@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Volume2, RotateCcw, ChevronRight, Pause, Play, Loader2, Lightbulb, AlertTriangle, BookOpen } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Flame, Volume2, RotateCcw, ChevronRight, Pause, Play, Loader2, Lightbulb, AlertTriangle, BookOpen } from 'lucide-react';
 import { AnswerRecord, ExamCard, StepFeedback } from '../types';
 import { EvalResult } from '../lib/api';
 import { ITEM_LABELS } from '../lib/scoring';
 import { playSfx } from '../lib/sfx';
+import { celebrateSmall } from '../lib/celebrate';
 import { FeedbackAction } from '../engine/interview';
 import { ModelReading, PronunciationView } from './ReadingReview';
 
@@ -15,19 +17,26 @@ interface Props {
   readModelAnswer: boolean;
   onSpeak: (text: string) => Promise<void>;
   onAction: (a: FeedbackAction) => void;
+  /** この問題の直前までの連続高得点（4点以上）数 */
+  prevStreak?: number;
 }
 
-export const ScoreDots: React.FC<{ score: number; max?: number }> = ({ score, max = 5 }) => (
+export const ScoreDots: React.FC<{ score: number; max?: number; animate?: boolean }> = ({ score, max = 5, animate }) => (
   <span className="inline-flex gap-0.5">
-    {Array.from({ length: max }).map((_, i) => (
-      <span key={i} className={`h-2.5 w-2.5 rounded-full ${i < score ? (score >= 4 ? 'bg-emerald-500' : score >= 3 ? 'bg-amber-400' : 'bg-rose-400') : 'bg-slate-200'}`} />
-    ))}
+    {Array.from({ length: max }).map((_, i) => {
+      const cls = `h-2.5 w-2.5 rounded-full ${i < score ? (score >= 4 ? 'bg-emerald-500' : score >= 3 ? 'bg-amber-400' : 'bg-rose-400') : 'bg-slate-200'}`;
+      return animate && i < score ? (
+        <motion.span key={i} className={cls} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.07, type: 'spring', stiffness: 400, damping: 15 }} />
+      ) : (
+        <span key={i} className={cls} />
+      );
+    })}
   </span>
 );
 
 const AUTO_SEC = 12;
 
-export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdvance, readModelAnswer, onSpeak, onAction }) => {
+export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdvance, readModelAnswer, onSpeak, onAction, prevStreak = 0 }) => {
   const [fb, setFb] = useState<EvalResult | null>(null);
   const [left, setLeft] = useState(AUTO_SEC);
   const [paused, setPaused] = useState(!autoAdvance);
@@ -47,6 +56,7 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
       if (!alive) return;
       setFb(r);
       playSfx(r.score >= 5 ? 'correct' : r.score >= 3 ? 'good' : 'retry');
+      if (r.score >= 5) setTimeout(() => alive && celebrateSmall(0.75, 0.25), 450);
       // 音読はお手本（タイトル＋本文）を必ず読み上げ。その他は満点解答
       const modelText = rec.item === 'reading' ? `${card.title}. ${card.passage}` : r.improvedAnswer;
       if (readModelAnswer && modelText) {
@@ -84,8 +94,25 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
         <div className="text-sm font-black text-slate-800">{ITEM_LABELS[rec.item]} の解説</div>
         {fb && (
           <div className="flex items-center gap-2">
-            <ScoreDots score={fb.score} />
-            <span className="text-lg font-black tabular-nums text-slate-900">{fb.score}/5</span>
+            {fb.score >= 4 && prevStreak + 1 >= 2 && (
+              <motion.span
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 }}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-amber-300"
+              >
+                <Flame className="h-3 w-3" /> {prevStreak + 1}問連続 高得点
+              </motion.span>
+            )}
+            <ScoreDots score={fb.score} animate />
+            <motion.span
+              initial={{ scale: 1.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.35 }}
+              className={`text-lg font-black tabular-nums ${fb.score === 5 ? 'bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent' : 'text-slate-900'}`}
+            >
+              {fb.score}/5
+            </motion.span>
           </div>
         )}
       </div>
