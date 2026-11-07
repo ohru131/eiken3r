@@ -7,7 +7,7 @@ import { ITEM_LABELS } from '../lib/scoring';
 import { playSfx } from '../lib/sfx';
 import { celebrateSmall } from '../lib/celebrate';
 import { FeedbackAction } from '../engine/interview';
-import { ModelReading, PronunciationView } from './ReadingReview';
+import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
 
 interface Props {
   card: ExamCard;
@@ -130,6 +130,7 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
         </div>
 
         {rec.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}
+        {!rec.pronunciation && rec.pronunciationNote && <PronunciationNote note={rec.pronunciationNote} />}
         {rec.item === 'reading' && <ModelReading card={card} onSpeak={onSpeak} />}
 
         {!fb ? (

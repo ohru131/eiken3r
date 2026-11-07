@@ -161,6 +161,8 @@ export interface AnswerRecord {
   feedback?: StepFeedback;
   /** 音読の発音評価（Azure 設定時） */
   pronunciation?: ReadingAssessment;
+  /** 発音評価ができなかった理由（Azure 設定時のみ） */
+  pronunciationNote?: string;
 }
 
 export interface FinalReport {

@@ -81,3 +81,13 @@ export const PronunciationView: React.FC<{ a: ReadingAssessment; onSpeak: (t: st
     {a.insertions.length > 0 && <div className="mt-1 text-[11px] text-slate-500">本文にない語: {a.insertions.join(', ')}</div>}
   </div>
 );
+
+/** 発音評価ができなかった時の理由表示 */
+export const PronunciationNote: React.FC<{ note: string }> = ({ note }) => (
+  <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-[12px] text-amber-900">
+    <div className="flex items-center gap-1 font-black">
+      <Mic2 className="h-3.5 w-3.5" /> 発音評価（Azure）ができませんでした
+    </div>
+    <div className="mt-0.5">{note}</div>
+  </div>
+);

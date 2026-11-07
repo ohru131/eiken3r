@@ -37,10 +37,12 @@ export async function testAzure(key: string, region: string): Promise<string | n
 }
 
 function describeAzureError(details: string): string {
-  if (/401|Unauthorized|authentication/i.test(details)) return 'キーまたはリージョンが正しくありません。';
-  if (/403|quota|429|Too many/i.test(details)) return '利用上限に達したか、権限がありません。';
-  if (/1006|websocket|network|Unable to contact/i.test(details)) return 'Azure に接続できません（リージョン名・ネット接続を確認）。';
-  return `Azure エラー: ${details.slice(0, 80)}`;
+  const raw = ` [詳細: ${String(details).slice(0, 140)}]`;
+  if (/401|Unauthorized|authentication/i.test(details)) return 'キーまたはリージョンが正しくありません。' + raw;
+  if (/403|quota|429|Too many/i.test(details)) return '利用上限に達したか、権限がありません。' + raw;
+  if (/1006|websocket|network|Unable to contact/i.test(details)) return 'Azure に接続できません（リージョン名・ネット接続を確認）。' + raw;
+  if (/microphone|getUserMedia|NotAllowed|NotFound|audio source/i.test(details)) return 'マイクを使えませんでした（ブラウザのマイク許可を確認）。' + raw;
+  return 'Azure エラー。' + raw;
 }
 
 // ---------- 音読の録音 + 発音評価 ----------
@@ -56,6 +58,8 @@ export interface AzureReadingResult {
   latencySec: number | null;
   reason: ListenEndReason;
   assessment: ReadingAssessment | null;
+  /** assessment が null の時の理由 */
+  note?: string;
 }
 
 export async function listenReadingAzure(opts: {
@@ -68,6 +72,8 @@ export async function listenReadingAzure(opts: {
   signal?: AbortSignal;
   onInterim?: (t: string) => void;
   onSilenceProgress?: (r: number) => void;
+  /** 抑揚（prosody）評価。非対応環境ではエラーになるため外せるように */
+  prosody?: boolean;
 }): Promise<AzureReadingResult> {
   const sdk = await loadSdk();
   if (opts.signal?.aborted) throw new AbortedError();
@@ -81,7 +87,7 @@ export async function listenReadingAzure(opts: {
     sdk.PronunciationAssessmentGranularity.Word,
     true
   );
-  pa.enableProsodyAssessment = true;
+  if (opts.prosody !== false) pa.enableProsodyAssessment = true;
   pa.applyTo(recognizer);
 
   const segments: Segment[] = [];
@@ -91,6 +97,8 @@ export async function listenReadingAzure(opts: {
   let firstSpeechAt: number | null = null;
   let lastActivity = performance.now();
   let fatal: string | null = null;
+  let parseError: string | null = null;
+  let recognizedCount = 0;
 
   const current = () => [...finals, interim].join(' ').replace(/\s+/g, ' ').trim();
   const touch = () => {
@@ -107,18 +115,30 @@ export async function listenReadingAzure(opts: {
     if (e.result.reason !== sdk.ResultReason.RecognizedSpeech || !e.result.text) return;
     interim = '';
     finals.push(e.result.text);
+    recognizedCount++;
     try {
-      const d = sdk.PronunciationAssessmentResult.fromResult(e.result).detailResult;
+      // SDK のヘルパーが使えない場合に備え、生の JSON からも読む
+      let d: any = null;
+      try {
+        d = sdk.PronunciationAssessmentResult.fromResult(e.result).detailResult;
+      } catch {
+        const raw = e.result.properties.getProperty(sdk.PropertyId.SpeechServiceResponse_JsonResult);
+        d = raw ? JSON.parse(raw)?.NBest?.[0] : null;
+      }
+      if (!d?.Words?.length) throw new Error(`評価データなし（${d ? 'Words 空' : 'JSON なし'}）`);
+      const pa = d.PronunciationAssessment || {};
       segments.push({
-        words: (d.Words || [])
-          .filter((w) => w.PronunciationAssessment?.ErrorType !== 'Omission' && w.PronunciationAssessment?.ErrorType !== 'Insertion')
-          .map((w) => ({ word: w.Word, accuracy: w.PronunciationAssessment?.AccuracyScore ?? 0 })),
-        fluency: d.PronunciationAssessment?.FluencyScore ?? 0,
-        prosody: typeof d.PronunciationAssessment?.ProsodyScore === 'number' ? d.PronunciationAssessment.ProsodyScore : null,
+        words: d.Words.filter((w: any) => {
+          const t = w.PronunciationAssessment?.ErrorType ?? w.ErrorType;
+          return t !== 'Omission' && t !== 'Insertion';
+        }).map((w: any) => ({ word: w.Word, accuracy: w.PronunciationAssessment?.AccuracyScore ?? w.AccuracyScore ?? 0 })),
+        fluency: pa.FluencyScore ?? d.FluencyScore ?? 0,
+        prosody: typeof (pa.ProsodyScore ?? d.ProsodyScore) === 'number' ? (pa.ProsodyScore ?? d.ProsodyScore) : null,
         duration: e.result.duration || 1,
       });
-    } catch {
-      /* 評価情報なし */
+    } catch (err: any) {
+      parseError = String(err?.message || err);
+      console.warn('[Azure] 発音評価データの読み取りに失敗', err, e.result.json);
     }
     touch();
   };
@@ -154,12 +174,15 @@ export async function listenReadingAzure(opts: {
       await stop(); // 最後の区間の評価結果を受け取ってから集計
       const text = typed ?? current();
       const latency = firstSpeechAt ? Math.round(((firstSpeechAt - startedAt) / 1000) * 10) / 10 : null;
-      resolve({
-        text,
-        latencySec: latency,
-        reason,
-        assessment: typed === undefined && segments.length ? aggregate(opts.referenceText, segments) : null,
-      });
+      const assessment = typed === undefined && segments.length ? aggregate(opts.referenceText, segments) : null;
+      let note: string | undefined;
+      if (!assessment) {
+        if (typed !== undefined) note = 'キーボード入力のため発音評価なし';
+        else if (fatal) note = fatal;
+        else if (!recognizedCount) note = '音声を認識できませんでした（マイク・声の大きさを確認）';
+        else note = `評価結果を受け取れませんでした（${parseError ?? '原因不明'}）`;
+      }
+      resolve({ text, latencySec: latency, reason, assessment, note });
     };
     const onAbort = () => {
       if (done) return;

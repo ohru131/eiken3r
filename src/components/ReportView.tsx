@@ -3,7 +3,7 @@ import { Award, RotateCcw, Home, ChevronDown, Loader2, Sparkles, ArrowRight } fr
 import { AnswerRecord, ExamCard, FinalReport, ScoredItem } from '../types';
 import { ITEM_LABELS, PASS_LINE } from '../lib/scoring';
 import { FeedbackBody, ScoreDots } from './FeedbackPanel';
-import { ModelReading, PronunciationView } from './ReadingReview';
+import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
 import { Achievement, ScoreHero } from './ScoreHero';
 
 interface Props {
@@ -102,6 +102,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                     )}
                   </div>
                   {rec?.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}
+                  {!rec?.pronunciation && rec?.pronunciationNote && <PronunciationNote note={rec.pronunciationNote} />}
                   {rec?.feedback && <FeedbackBody fb={rec.feedback} onSpeak={onSpeak} />}
                   {k === 'reading' && <ModelReading card={card} onSpeak={onSpeak} />}
                   {q && (
