@@ -6,7 +6,14 @@ interface Coord {
   y: number;
 }
 
+/**
+ * 顔パーツ位置は元画像のピクセル座標で保持する。
+ * 画像と同じアスペクト比のレイヤー上に重ねるため、表示枠のサイズや
+ * object-fit のトリミングに左右されずに目・口の位置が一致する。
+ */
 interface FaceMeta {
+  imgW: number;
+  imgH: number;
   skin: string;
   lip: string;
   inside: string;
@@ -19,34 +26,40 @@ interface FaceMeta {
 
 const FACE_META: Record<string, FaceMeta> = {
   smith: {
-    skin: '#f8dcc2',
+    imgW: 458,
+    imgH: 768,
+    skin: '#fcd0b0',
     lip: '#c6736a',
     inside: '#5a1818',
-    mouth: { x: 50.8, y: 62.0 },
-    leftEye: { x: 38.5, y: 46.7 },
-    rightEye: { x: 62.5, y: 46.7 },
-    eyeWidth: 9,
-    mouthWidth: 11,
+    mouth: { x: 234, y: 296 },
+    leftEye: { x: 194, y: 221 },
+    rightEye: { x: 271, y: 221 },
+    eyeWidth: 36,
+    mouthWidth: 66,
   },
   brown: {
-    skin: '#fae0cc',
+    imgW: 458,
+    imgH: 768,
+    skin: '#f8cdb3',
     lip: '#c76e6b',
     inside: '#5a1818',
-    mouth: { x: 50.0, y: 61.8 },
-    leftEye: { x: 38.6, y: 48.2 },
-    rightEye: { x: 61.9, y: 47.8 },
-    eyeWidth: 8.5,
-    mouthWidth: 10.5,
+    mouth: { x: 234, y: 304 },
+    leftEye: { x: 188, y: 236 },
+    rightEye: { x: 272, y: 236 },
+    eyeWidth: 36,
+    mouthWidth: 60,
   },
   tanaka: {
-    skin: '#f6d5ba',
+    imgW: 460,
+    imgH: 768,
+    skin: '#fbcba7',
     lip: '#bf7068',
     inside: '#551818',
-    mouth: { x: 50.7, y: 63.7 },
-    leftEye: { x: 37.5, y: 44.5 },
-    rightEye: { x: 62.8, y: 45.6 },
-    eyeWidth: 9,
-    mouthWidth: 10.5,
+    mouth: { x: 236, y: 302 },
+    leftEye: { x: 191, y: 231 },
+    rightEye: { x: 272, y: 231 },
+    eyeWidth: 34,
+    mouthWidth: 66,
   },
 };
 
@@ -79,22 +92,22 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
     return () => clearTimeout(timeoutId);
   }, []);
 
-  // 発話中のリップシンク（リアルタイム口パク）
+  // 発話中のリップシンク（口パク）
   useEffect(() => {
     if (!speaking) {
       setMouthOpen(0);
       return;
     }
 
-    // 口の開き具合を母音のように変化させる
-    const vowels = [0.25, 0.75, 0.4, 0.9, 0.1, 0.6, 0.85, 0.3];
+    // 母音っぽい開閉パターン。0 付近も含めて「閉じ→開き」を自然に繰り返す
+    const vowels = [0.35, 0.8, 0.5, 0.15, 0.7, 0.95, 0.4, 0.05, 0.6, 0.3];
     let step = 0;
+    setMouthOpen(vowels[0]);
     const interval = setInterval(() => {
       step = (step + 1) % vowels.length;
-      // ランダム要素を加えて単調さを防ぐ
-      const target = vowels[step] * (0.8 + Math.random() * 0.4);
+      const target = vowels[step] * (0.85 + Math.random() * 0.3);
       setMouthOpen(Math.min(1, Math.max(0, target)));
-    }, 110);
+    }, 120);
 
     return () => clearInterval(interval);
   }, [speaking]);
@@ -104,6 +117,15 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
   const avatarSrc = rawSrc.startsWith('/') ? `${base.endsWith('/') ? base : base + '/'}${rawSrc.slice(1)}` : rawSrc;
 
   const meta = FACE_META[examiner.id] || FACE_META.smith;
+
+  // 元画像ピクセル座標 → 画像レイヤー内の % 位置
+  const px = (v: number) => `${(v / meta.imgW) * 100}%`;
+  const py = (v: number) => `${(v / meta.imgH) * 100}%`;
+
+  const eyeW = meta.eyeWidth * 1.15;
+  const eyeH = meta.eyeWidth * 0.6;
+  const mouthBoxW = meta.mouthWidth * 1.3;
+  const mouthBoxH = mouthBoxW * (40 / 60);
 
   // ハイクオリティ画像アバター
   if (avatarSrc && !imgError) {
@@ -115,7 +137,7 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
         )}
 
         <div
-          className={`relative h-full w-full overflow-hidden rounded-2xl border-2 bg-gradient-to-b from-white to-slate-100 shadow-md transition-all duration-300 ${
+          className={`relative h-full w-full overflow-hidden rounded-2xl border-2 bg-gradient-to-b from-white to-slate-100 shadow-md transition-colors duration-300 ${
             speaking
               ? 'border-indigo-500 shadow-indigo-200'
               : listening
@@ -123,17 +145,14 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
               : 'border-slate-300'
           }`}
         >
-          {/* 面接官の全身・頭部レイヤー（話す・聞くのモーション付き） */}
+          {/* 画像と同じアスペクト比のレイヤー（上端基準で表示枠からはみ出た下部は切り取り） */}
           <div
-            className={`relative h-full w-full transition-transform duration-300 ${
-              speaking
-                ? 'animate-examiner-talk'
-                : listening
-                ? 'animate-examiner-listen'
-                : 'animate-examiner-idle'
+            className={`absolute left-0 right-0 top-0 ${
+              speaking ? 'animate-examiner-talk' : listening ? 'animate-examiner-listen' : 'animate-examiner-idle'
             }`}
             style={{
-              transformOrigin: 'bottom center',
+              aspectRatio: `${meta.imgW} / ${meta.imgH}`,
+              transformOrigin: '50% 45%',
             }}
           >
             {/* ベースイラスト */}
@@ -141,118 +160,69 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
               src={avatarSrc}
               alt={examiner.name}
               onError={() => setImgError(true)}
-              className="h-full w-full object-cover object-top pointer-events-none"
+              draggable={false}
+              className="absolute inset-0 block h-full w-full pointer-events-none"
             />
 
             {/* 瞬き（Blink）オーバーレイ */}
-            {blink && (
-              <>
-                {/* 左目 */}
+            {blink &&
+              [meta.leftEye, meta.rightEye].map((eye, i) => (
                 <div
+                  key={i}
                   className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2"
-                  style={{
-                    left: `${meta.leftEye.x}%`,
-                    top: `${meta.leftEye.y}%`,
-                    width: `${meta.eyeWidth}%`,
-                    height: '4%',
-                  }}
+                  style={{ left: px(eye.x), top: py(eye.y), width: px(eyeW), height: py(eyeH) }}
                 >
-                  <svg viewBox="0 0 40 18" className="h-full w-full">
+                  <svg viewBox="0 0 40 22" preserveAspectRatio="none" className="h-full w-full overflow-visible">
                     {/* まぶた（肌色カバー） */}
-                    <ellipse cx="20" cy="9" rx="19" ry="8" fill={meta.skin} />
-                    {/* 閉じた笑顔のまつ毛ライン */}
-                    <path
-                      d="M4,10 Q20,16 36,10"
-                      stroke="#2d221e"
-                      strokeWidth="3.2"
-                      strokeLinecap="round"
-                      fill="none"
-                    />
+                    <ellipse cx="20" cy="11" rx="19" ry="10" fill={meta.skin} />
+                    {/* 閉じた目のまつ毛ライン */}
+                    <path d="M5,11 Q20,17 35,11" stroke="#2d221e" strokeWidth="2.6" strokeLinecap="round" fill="none" />
                   </svg>
                 </div>
+              ))}
 
-                {/* 右目 */}
-                <div
-                  className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2"
-                  style={{
-                    left: `${meta.rightEye.x}%`,
-                    top: `${meta.rightEye.y}%`,
-                    width: `${meta.eyeWidth}%`,
-                    height: '4%',
-                  }}
-                >
-                  <svg viewBox="0 0 40 18" className="h-full w-full">
-                    <ellipse cx="20" cy="9" rx="19" ry="8" fill={meta.skin} />
-                    <path
-                      d="M4,10 Q20,16 36,10"
-                      stroke="#2d221e"
-                      strokeWidth="3.2"
-                      strokeLinecap="round"
-                      fill="none"
-                    />
-                  </svg>
-                </div>
-              </>
-            )}
-
-            {/* 口パク（Talking Mouth）オーバーレイ */}
-            {speaking && mouthOpen > 0.15 && (
+            {/* 口パク（Talking Mouth）オーバーレイ：発話中は常に表示し、開き具合だけ変える */}
+            {speaking && (
               <div
                 className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2"
-                style={{
-                  left: `${meta.mouth.x}%`,
-                  top: `${meta.mouth.y}%`,
-                  width: `${meta.mouthWidth * (0.85 + mouthOpen * 0.25)}%`,
-                  height: `${7 * (0.6 + mouthOpen * 0.9)}%`,
-                  transition: 'height 0.08s ease-out, width 0.08s ease-out',
-                }}
+                style={{ left: px(meta.mouth.x), top: py(meta.mouth.y), width: px(mouthBoxW), height: py(mouthBoxH) }}
               >
-                <svg viewBox="0 0 60 40" className="h-full w-full overflow-visible">
-                  {/* 周囲の肌に馴染ませるぼかしシャドウ/カバー */}
-                  <ellipse cx="30" cy="20" rx="28" ry="17" fill={meta.skin} />
+                <svg viewBox="0 0 60 40" preserveAspectRatio="none" className="h-full w-full overflow-visible">
+                  <defs>
+                    <filter id={`mouth-soft-${examiner.id}`} x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="1.2" />
+                    </filter>
+                  </defs>
+                  {/* 元イラストの口を隠す肌色カバー（縁をぼかして馴染ませる） */}
+                  <ellipse cx="30" cy="20" rx="27" ry="15" fill={meta.skin} filter={`url(#mouth-soft-${examiner.id})`} />
 
-                  {/* 開いた口の中 */}
-                  <ellipse
-                    cx="30"
-                    cy="20"
-                    rx={20 + mouthOpen * 4}
-                    ry={9 + mouthOpen * 8}
-                    fill={meta.inside}
-                  />
-
-                  {/* 上の歯 */}
-                  <path
-                    d={`M${18 - mouthOpen * 2},${17 - mouthOpen * 2} Q30,${22 - mouthOpen} ${42 + mouthOpen * 2},${17 - mouthOpen * 2} Z`}
-                    fill="#ffffff"
-                    opacity="0.95"
-                  />
-
-                  {/* 舌 */}
-                  <ellipse
-                    cx="30"
-                    cy={24 + mouthOpen * 3}
-                    rx={12 + mouthOpen * 2}
-                    ry={6 + mouthOpen * 2}
-                    fill="#df7575"
-                  />
-
-                  {/* 上唇のライン */}
-                  <path
-                    d={`M${10 - mouthOpen * 2},20 Q30,${12 - mouthOpen * 4} ${50 + mouthOpen * 2},20`}
-                    stroke={meta.lip}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-
-                  {/* 下唇のライン */}
-                  <path
-                    d={`M${12 - mouthOpen * 2},20 Q30,${27 + mouthOpen * 8} ${48 + mouthOpen * 2},20`}
-                    stroke={meta.lip}
-                    strokeWidth="3.2"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
+                  {mouthOpen < 0.12 ? (
+                    // ほぼ閉じた口
+                    <path d="M14,20 Q30,25 46,20" stroke={meta.lip} strokeWidth="2.6" strokeLinecap="round" fill="none" />
+                  ) : (
+                    <>
+                      {/* 開いた口の中 */}
+                      <path
+                        d={`M${15 - mouthOpen * 2},19 Q30,${17 - mouthOpen * 2} ${45 + mouthOpen * 2},19 Q30,${21 + mouthOpen * 24} ${15 - mouthOpen * 2},19 Z`}
+                        fill={meta.inside}
+                      />
+                      {/* 上の歯 */}
+                      <path
+                        d={`M${18 - mouthOpen},${19 - mouthOpen * 0.5} Q30,${17.5 - mouthOpen} ${42 + mouthOpen},${19 - mouthOpen * 0.5} Q30,${21 + mouthOpen * 2} ${18 - mouthOpen},${19 - mouthOpen * 0.5} Z`}
+                        fill="#ffffff"
+                      />
+                      {/* 舌 */}
+                      <ellipse cx="30" cy={20 + mouthOpen * 13} rx={6 + mouthOpen * 3} ry={1.5 + mouthOpen * 2.5} fill="#d96a6a" />
+                      {/* 唇の輪郭 */}
+                      <path
+                        d={`M${15 - mouthOpen * 2},19 Q30,${17 - mouthOpen * 2} ${45 + mouthOpen * 2},19 Q30,${21 + mouthOpen * 24} ${15 - mouthOpen * 2},19 Z`}
+                        stroke={meta.lip}
+                        strokeWidth="1.8"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
+                    </>
+                  )}
                 </svg>
               </div>
             )}

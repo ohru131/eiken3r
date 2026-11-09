@@ -42,24 +42,28 @@ html {
   animation: spinSlow 12s linear infinite;
 }
 
+/* 面接官アバター：頭部を中心にした小さく滑らかな動き（状態切替で跳ねないよう全て 0 起点） */
 @keyframes examinerTalk {
   0%, 100% {
     transform: translateY(0) rotate(0deg);
   }
-  25% {
-    transform: translateY(-2px) rotate(0.4deg);
+  30% {
+    transform: translateY(-0.6%) rotate(0.6deg);
   }
-  75% {
-    transform: translateY(1.5px) rotate(-0.3deg);
+  70% {
+    transform: translateY(0.3%) rotate(-0.5deg);
   }
 }
 
 @keyframes examinerListen {
-  0%, 100% {
-    transform: translateY(0) scale(1.015);
+  0%, 60%, 100% {
+    transform: translateY(0) rotate(0deg);
   }
-  50% {
-    transform: translateY(2.5px) scale(1.02);
+  20% {
+    transform: translateY(0.8%) rotate(0deg);
+  }
+  40% {
+    transform: translateY(0.2%) rotate(0deg);
   }
 }
 
@@ -68,18 +72,26 @@ html {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-1.5px);
+    transform: translateY(-0.4%);
   }
 }
 
 .animate-examiner-talk {
-  animation: examinerTalk 0.5s ease-in-out infinite;
+  animation: examinerTalk 1.8s ease-in-out infinite;
 }
 
 .animate-examiner-listen {
-  animation: examinerListen 2.2s ease-in-out infinite;
+  animation: examinerListen 2.6s ease-in-out infinite;
 }
 
 .animate-examiner-idle {
   animation: examinerIdle 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-examiner-talk,
+  .animate-examiner-listen,
+  .animate-examiner-idle {
+    animation: none;
+  }
 }
