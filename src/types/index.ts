@@ -101,6 +101,7 @@ export interface ExaminerProfile {
   voiceHints: string[];
   pitch: number;
   rate: number;
+  avatar?: string;
 }
 
 // ===== シミュレーション =====

@@ -171,19 +171,28 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-2 text-sm font-black text-slate-900">面接官</div>
           <div className="grid grid-cols-3 gap-2">
-            {EXAMINERS.map((e) => (
-              <button
-                key={e.id}
-                onClick={() => onSettings({ ...settings, examinerId: e.id })}
-                className={`rounded-xl border-2 p-2 text-left transition ${
-                  settings.examinerId === e.id ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className={`mb-1 h-1.5 w-8 rounded-full bg-gradient-to-r ${e.color}`} />
-                <div className="text-xs font-black text-slate-900">{e.name}</div>
-                <div className="mt-0.5 text-[11px] leading-snug text-slate-500">{e.description}</div>
-              </button>
-            ))}
+            {EXAMINERS.map((e) => {
+              const base = import.meta.env.BASE_URL || '/';
+              const rawSrc = e.avatar || `/images/examiners/${e.id}.png`;
+              const src = rawSrc.startsWith('/') ? `${base.endsWith('/') ? base : base + '/'}${rawSrc.slice(1)}` : rawSrc;
+
+              return (
+                <button
+                  key={e.id}
+                  onClick={() => onSettings({ ...settings, examinerId: e.id })}
+                  className={`flex flex-col items-center rounded-xl border-2 p-2 text-center transition ${
+                    settings.examinerId === e.id ? 'border-indigo-600 bg-indigo-50 shadow-sm' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="relative mb-1.5 h-12 w-12 overflow-hidden rounded-full border border-slate-300 bg-white shadow-sm sm:h-14 sm:w-14">
+                    <img src={src} alt={e.name} className="h-full w-full object-cover object-top" />
+                  </div>
+                  <div className={`mb-1 h-1 w-6 rounded-full bg-gradient-to-r ${e.color}`} />
+                  <div className="text-xs font-black text-slate-900">{e.name}</div>
+                  <div className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-slate-500">{e.description}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>

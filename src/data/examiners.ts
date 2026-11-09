@@ -10,6 +10,7 @@ export const EXAMINERS: ExaminerProfile[] = [
     voiceHints: ['Google US English', 'Alex', 'Samantha', 'Microsoft Guy', 'Microsoft Aria', 'en-US'],
     pitch: 0.95,
     rate: 0.9,
+    avatar: '/images/examiners/smith.png',
   },
   {
     id: 'brown',
@@ -20,6 +21,7 @@ export const EXAMINERS: ExaminerProfile[] = [
     voiceHints: ['Google UK English Female', 'Serena', 'Kate', 'Microsoft Libby', 'Microsoft Sonia', 'en-GB', 'en-US'],
     pitch: 1.1,
     rate: 1.0,
+    avatar: '/images/examiners/brown.png',
   },
   {
     id: 'tanaka',
@@ -30,5 +32,6 @@ export const EXAMINERS: ExaminerProfile[] = [
     voiceHints: ['Google UK English Male', 'Daniel', 'Microsoft Ryan', 'Microsoft Guy', 'en-US'],
     pitch: 0.85,
     rate: 0.95,
+    avatar: '/images/examiners/tanaka.png',
   },
 ];

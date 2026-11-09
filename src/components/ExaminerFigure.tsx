@@ -11,6 +11,8 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
 }) => {
   const [blink, setBlink] = useState(false);
   const [mouth, setMouth] = useState(0);
+  const [imgError, setImgError] = useState(false);
+
   useEffect(() => {
     const id = setInterval(() => {
       setBlink(true);
@@ -18,12 +20,76 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
     }, 3800);
     return () => clearInterval(id);
   }, []);
+
   useEffect(() => {
     if (!speaking) return setMouth(0);
     const id = setInterval(() => setMouth(Math.random()), 110);
     return () => clearInterval(id);
   }, [speaking]);
 
+  const rawSrc = examiner.avatar || `/images/examiners/${examiner.id}.png`;
+  const base = import.meta.env.BASE_URL || '/';
+  const avatarSrc = rawSrc.startsWith('/') ? `${base.endsWith('/') ? base : base + '/'}${rawSrc.slice(1)}` : rawSrc;
+
+  // イラスト画像がある場合はハイクオリティなアバターを表示
+  if (avatarSrc && !imgError) {
+    return (
+      <div className="relative flex h-full w-full items-center justify-center">
+        {/* 聞き取り中の相槌エフェクト */}
+        {listening && (
+          <div className="absolute inset-2 -z-10 animate-ping rounded-3xl bg-emerald-400/25" />
+        )}
+
+        <div
+          className={`relative h-full w-full overflow-hidden rounded-2xl border-2 bg-gradient-to-b from-white to-slate-100 shadow-md transition-all duration-300 ${
+            speaking
+              ? 'border-indigo-500 shadow-indigo-200'
+              : listening
+              ? 'border-emerald-500 shadow-emerald-200'
+              : 'border-slate-300'
+          }`}
+        >
+          <img
+            src={avatarSrc}
+            alt={examiner.name}
+            onError={() => setImgError(true)}
+            className={`h-full w-full object-cover object-top transition-transform duration-200 ${
+              speaking ? 'scale-[1.02]' : listening ? 'scale-[1.01]' : 'scale-100'
+            }`}
+          />
+
+          {/* デスク風の木目バー */}
+          <div className="absolute bottom-0 left-0 right-0 h-4 border-t border-amber-900/30 bg-gradient-to-r from-amber-800 via-amber-700 to-amber-900 shadow-sm" />
+
+          {/* 発話中（speaking）の音声波形インジケーター */}
+          {speaking && (
+            <div className="absolute bottom-6 right-3 flex items-end gap-1 rounded-full bg-slate-900/80 px-2 py-1 shadow-lg backdrop-blur-sm">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="w-1 rounded-full bg-indigo-400 animate-pulse"
+                  style={{
+                    height: `${8 + Math.round(mouth * 10) * (i === 1 ? 1.5 : 1)}px`,
+                    animationDelay: `${i * 0.15}s`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* 傾聴中（listening）のインジケーター */}
+          {listening && (
+            <div className="absolute bottom-6 right-3 flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-lg backdrop-blur-sm">
+              <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+              Listen
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // フォールバック用SVG
   const female = examiner.id === 'brown';
   const skin = SKIN[examiner.id] || '#f6d3b3';
   const hair = HAIR[examiner.id] || '#333';
