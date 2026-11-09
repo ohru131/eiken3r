@@ -133,11 +133,6 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
   if (avatarSrc && !imgError) {
     return (
       <div className="relative flex h-full w-full items-center justify-center select-none">
-        {/* 聞き取り中（listening）の波紋エフェクト */}
-        {listening && (
-          <div className="absolute inset-1 -z-10 animate-ping motion-reduce:animate-none rounded-3xl bg-emerald-400/30 duration-1000" />
-        )}
-
         <div
           className={`relative h-full w-full overflow-hidden rounded-2xl border-2 bg-gradient-to-b from-white to-slate-100 shadow-md transition-colors duration-300 ${
             speaking
@@ -147,16 +142,9 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
               : 'border-slate-300'
           }`}
         >
-          {/* 画像と同じアスペクト比のレイヤー（上端基準で表示枠からはみ出た下部は切り取り） */}
-          <div
-            className={`absolute left-0 right-0 top-0 ${
-              speaking ? 'animate-examiner-talk' : listening ? 'animate-examiner-listen' : 'animate-examiner-idle'
-            }`}
-            style={{
-              aspectRatio: `${meta.imgW} / ${meta.imgH}`,
-              transformOrigin: '50% 45%',
-            }}
-          >
+          {/* 画像と同じアスペクト比のレイヤー（上端基準で表示枠からはみ出た下部は切り取り）。
+              画面酔い防止のため、頭部・全体の揺れアニメーションは付けない（口パク・瞬きのみ） */}
+          <div className="absolute left-0 right-0 top-0" style={{ aspectRatio: `${meta.imgW} / ${meta.imgH}` }}>
             {/* ベースイラスト */}
             <img
               src={avatarSrc}
