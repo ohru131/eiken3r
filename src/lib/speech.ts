@@ -30,12 +30,35 @@ function loadVoices() {
 }
 if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
   loadVoices();
-  window.speechSynthesis.onvoiceschanged = loadVoices;
+  window.speechSynthesis.addEventListener?.('voiceschanged', loadVoices);
 }
 
-export function pickVoice(hints: string[]): SpeechSynthesisVoice | undefined {
+/** 音声一覧は非同期に読み込まれる（Edge/Chrome）ため、最大 timeoutMs 待つ */
+function waitForVoices(timeoutMs = 1500): Promise<void> {
+  if (cachedVoices.length || !('speechSynthesis' in window)) return Promise.resolve();
+  loadVoices();
+  if (cachedVoices.length) return Promise.resolve();
+  return new Promise((resolve) => {
+    const synth = window.speechSynthesis;
+    const done = () => {
+      clearTimeout(t);
+      synth.removeEventListener?.('voiceschanged', done);
+      loadVoices();
+      resolve();
+    };
+    const t = setTimeout(done, timeoutMs);
+    synth.addEventListener?.('voiceschanged', done);
+  });
+}
+
+/** オンライン音声（Edge の "Online (Natural)" 等）で失敗した音声名。以後は端末内蔵音声を使う */
+const failedVoices = new Set<string>();
+
+export function pickVoice(hints: string[], opts: { localOnly?: boolean } = {}): SpeechSynthesisVoice | undefined {
   if (!cachedVoices.length) loadVoices();
-  const en = cachedVoices.filter((v) => v.lang.toLowerCase().startsWith('en'));
+  const en = cachedVoices.filter(
+    (v) => v.lang.toLowerCase().startsWith('en') && !failedVoices.has(v.voiceURI) && (!opts.localOnly || v.localService)
+  );
   for (const h of hints) {
     const v = en.find((x) => x.name.includes(h));
     if (v) return v;
@@ -56,44 +79,125 @@ export interface SpeakOptions {
   lang?: string;
 }
 
-export function speak(text: string, opts: SpeakOptions = {}): Promise<void> {
+// Chromium では発話中の utterance が GC されると onend が来ないため参照を保持する
+let currentUtterance: SpeechSynthesisUtterance | null = null;
+
+type AttemptResult = 'ok' | 'failed';
+
+/** 1 回分の発話。開始しない・エラーになった場合は 'failed' を返す */
+function speakOnce(
+  text: string,
+  opts: SpeakOptions,
+  voice: SpeechSynthesisVoice | undefined,
+  estimateMs: number
+): Promise<AttemptResult> {
   const { signal } = opts;
-  if (signal?.aborted) return Promise.reject(new AbortedError());
+  return new Promise((resolve, reject) => {
+    const synth = window.speechSynthesis;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = voice?.lang || opts.lang || 'en-US';
+    u.rate = opts.rate ?? 0.95;
+    u.pitch = opts.pitch ?? 1;
+    if (voice) u.voice = voice;
+    currentUtterance = u;
+
+    let done = false;
+    let started = false;
+    const finish = (r: AttemptResult | Error) => {
+      if (done) return;
+      done = true;
+      clearTimeout(startGuard);
+      clearTimeout(safety);
+      signal?.removeEventListener('abort', onAbort);
+      if (currentUtterance === u) currentUtterance = null;
+      r instanceof Error ? reject(r) : resolve(r);
+    };
+    // 一定時間内に onstart が来なければ失敗扱い（オンライン音声の通信失敗・エンジン停止対策）
+    const startGuard = setTimeout(() => {
+      if (!started) {
+        synth.cancel();
+        finish('failed');
+      }
+    }, 3500);
+    // onend が来ないブラウザ対策
+    const safety = setTimeout(() => finish('ok'), estimateMs * 2 + 6000);
+    const onAbort = () => {
+      synth.cancel();
+      finish(new AbortedError());
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    u.onstart = () => {
+      started = true;
+    };
+    u.onend = () => finish(started ? 'ok' : 'failed');
+    u.onerror = (e) => {
+      if (signal?.aborted) return finish(new AbortedError());
+      // interrupted / canceled は自分で止めた場合
+      if (e.error === 'interrupted' || e.error === 'canceled') return finish(started ? 'ok' : 'failed');
+      console.warn('[speech] TTS error:', e.error, voice?.name);
+      finish('failed');
+    };
+    // 停止状態で固まっていることがある（Edge）
+    if (synth.paused) synth.resume();
+    synth.speak(u);
+  });
+}
+
+export async function speak(text: string, opts: SpeakOptions = {}): Promise<void> {
+  const { signal } = opts;
+  if (signal?.aborted) throw new AbortedError();
   const estimateMs = Math.max(1200, text.length * 70) / (opts.rate || 1);
 
   if (opts.muted || !('speechSynthesis' in window)) {
     return sleep(estimateMs, signal);
   }
 
-  return new Promise((resolve, reject) => {
+  const synth = window.speechSynthesis;
+  // cancel 直後の speak は無視されることがある（Chromium）ため、少し間を空ける
+  if (synth.speaking || synth.pending) {
+    synth.cancel();
+    await sleep(80, signal);
+  }
+  await waitForVoices();
+  if (signal?.aborted) throw new AbortedError();
+
+  const useVoice = !opts.lang || opts.lang.startsWith('en');
+  const first = useVoice ? pickVoice(opts.voiceHints || []) : undefined;
+  const startedAt = performance.now();
+  if ((await speakOnce(text, opts, first, estimateMs)) === 'ok') return;
+
+  // 失敗：オンライン音声なら記録して、端末内蔵音声で再試行
+  if (first && !first.localService) failedVoices.add(first.voiceURI);
+  const fallback = useVoice ? pickVoice(opts.voiceHints || [], { localOnly: true }) : undefined;
+  if (fallback?.voiceURI !== first?.voiceURI || !first) {
+    synth.cancel();
+    await sleep(80, signal);
+    if ((await speakOnce(text, opts, fallback, estimateMs)) === 'ok') return;
+  }
+
+  // それでも話せない場合は、読み上げ相当の時間だけ待って進行を合わせる
+  console.warn('[speech] TTS unavailable; continuing without audio');
+  const remain = estimateMs - (performance.now() - startedAt);
+  if (remain > 0) await sleep(remain, signal);
+}
+
+/**
+ * クリック等のユーザー操作の中で呼ぶ。音声合成を初期化し、固まったキューを解消する。
+ * （ユーザー操作なしの speak は Chromium/Safari で not-allowed になることがある）
+ */
+export function unlockSpeech() {
+  if (!('speechSynthesis' in window)) return;
+  try {
     const synth = window.speechSynthesis;
     synth.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = opts.lang || 'en-US';
-    u.rate = opts.rate ?? 0.95;
-    u.pitch = opts.pitch ?? 1;
-    const v = pickVoice(opts.voiceHints || []);
-    if (v && (!opts.lang || opts.lang.startsWith('en'))) u.voice = v;
-
-    let done = false;
-    const finish = (err?: Error) => {
-      if (done) return;
-      done = true;
-      clearTimeout(safety);
-      signal?.removeEventListener('abort', onAbort);
-      err ? reject(err) : resolve();
-    };
-    // onend が来ないブラウザ対策
-    const safety = setTimeout(() => finish(), estimateMs * 2 + 4000);
-    const onAbort = () => {
-      synth.cancel();
-      finish(new AbortedError());
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-    u.onend = () => finish();
-    u.onerror = () => finish();
+    if (synth.paused) synth.resume();
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
     synth.speak(u);
-  });
+    loadVoices();
+  } catch {
+    /* noop */
+  }
 }
 
 export function stopSpeaking() {
