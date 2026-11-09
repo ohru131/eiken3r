@@ -82,9 +82,19 @@ export interface SpeakOptions {
 // Chromium では発話中の utterance が GC されると onend が来ないため参照を保持する
 let currentUtterance: SpeechSynthesisUtterance | null = null;
 
-type AttemptResult = 'ok' | 'failed';
+/** stopSpeaking() のたびに進む世代番号。待機中の speak() が停止を検知するために使う */
+let speechGen = 0;
 
-/** 1 回分の発話。開始しない・エラーになった場合は 'failed' を返す */
+/** 開始タイムアウトの回数（オンライン音声は 2 回でブラックリスト入り） */
+const timeoutCounts = new Map<string, number>();
+
+/**
+ * ok: 話し終えた / stopped: 外部から止められた（再試行しない）
+ * timeout: 開始しなかった / error: エンジンがエラーを返した
+ */
+type AttemptResult = 'ok' | 'stopped' | 'timeout' | 'error';
+
+/** 1 回分の発話 */
 function speakOnce(
   text: string,
   opts: SpeakOptions,
@@ -112,15 +122,24 @@ function speakOnce(
       if (currentUtterance === u) currentUtterance = null;
       r instanceof Error ? reject(r) : resolve(r);
     };
-    // 一定時間内に onstart が来なければ失敗扱い（オンライン音声の通信失敗・エンジン停止対策）
-    const startGuard = setTimeout(() => {
-      if (!started) {
+    // 一定時間内に onstart が来なければ失敗扱い（オンライン音声の通信失敗・エンジン停止対策）。
+    // オンライン音声は初回の立ち上がりが遅いことがあるため長めに待つ
+    const online = !!voice && !voice.localService;
+    const startGuard = setTimeout(
+      () => {
+        if (started) return;
+        // onstart を出さずに再生するエンジン向け：内蔵音声で再生中なら開始済みとみなす
+        if (!online && synth.speaking && !synth.pending) {
+          started = true;
+          return;
+        }
         synth.cancel();
-        finish('failed');
-      }
-    }, 3500);
+        finish('timeout');
+      },
+      online ? 8000 : 4000
+    );
     // onend が来ないブラウザ対策
-    const safety = setTimeout(() => finish('ok'), estimateMs * 2 + 6000);
+    const safety = setTimeout(() => finish('ok'), estimateMs * 2 + 10000);
     const onAbort = () => {
       synth.cancel();
       finish(new AbortedError());
@@ -129,13 +148,14 @@ function speakOnce(
     u.onstart = () => {
       started = true;
     };
-    u.onend = () => finish(started ? 'ok' : 'failed');
+    // onstart が無くても正常終了したなら話し終えたとみなす
+    u.onend = () => finish('ok');
     u.onerror = (e) => {
       if (signal?.aborted) return finish(new AbortedError());
-      // interrupted / canceled は自分で止めた場合
-      if (e.error === 'interrupted' || e.error === 'canceled') return finish(started ? 'ok' : 'failed');
+      // interrupted / canceled は stopSpeaking() や別の発話で止められた場合。再試行しない
+      if (e.error === 'interrupted' || e.error === 'canceled') return finish('stopped');
       console.warn('[speech] TTS error:', e.error, voice?.name);
-      finish('failed');
+      finish('error');
     };
     // 停止状態で固まっていることがある（Edge）
     if (synth.paused) synth.resume();
@@ -152,6 +172,12 @@ export async function speak(text: string, opts: SpeakOptions = {}): Promise<void
     return sleep(estimateMs, signal);
   }
 
+  const gen = speechGen;
+  const stopped = () => {
+    if (signal?.aborted) throw new AbortedError();
+    return gen !== speechGen;
+  };
+
   const synth = window.speechSynthesis;
   // cancel 直後の speak は無視されることがある（Chromium）ため、少し間を空ける
   if (synth.speaking || synth.pending) {
@@ -159,20 +185,29 @@ export async function speak(text: string, opts: SpeakOptions = {}): Promise<void
     await sleep(80, signal);
   }
   await waitForVoices();
-  if (signal?.aborted) throw new AbortedError();
+  if (stopped()) return;
 
   const useVoice = !opts.lang || opts.lang.startsWith('en');
   const first = useVoice ? pickVoice(opts.voiceHints || []) : undefined;
   const startedAt = performance.now();
-  if ((await speakOnce(text, opts, first, estimateMs)) === 'ok') return;
+  const r1 = await speakOnce(text, opts, first, estimateMs);
+  if (r1 === 'ok' || r1 === 'stopped' || stopped()) return;
 
-  // 失敗：オンライン音声なら記録して、端末内蔵音声で再試行
-  if (first && !first.localService) failedVoices.add(first.voiceURI);
+  // 失敗したオンライン音声は記録する（エラーは即、開始タイムアウトは 2 回で）
+  if (first && !first.localService) {
+    const n = (timeoutCounts.get(first.voiceURI) || 0) + 1;
+    timeoutCounts.set(first.voiceURI, n);
+    if (r1 === 'error' || n >= 2) failedVoices.add(first.voiceURI);
+  }
+
+  // 端末内蔵音声で 1 回だけ再試行（別の音声がある場合のみ）
   const fallback = useVoice ? pickVoice(opts.voiceHints || [], { localOnly: true }) : undefined;
-  if (fallback?.voiceURI !== first?.voiceURI || !first) {
+  if (fallback && fallback.voiceURI !== first?.voiceURI) {
     synth.cancel();
     await sleep(80, signal);
-    if ((await speakOnce(text, opts, fallback, estimateMs)) === 'ok') return;
+    if (stopped()) return;
+    const r2 = await speakOnce(text, opts, fallback, estimateMs);
+    if (r2 === 'ok' || r2 === 'stopped' || stopped()) return;
   }
 
   // それでも話せない場合は、読み上げ相当の時間だけ待って進行を合わせる
@@ -201,6 +236,7 @@ export function unlockSpeech() {
 }
 
 export function stopSpeaking() {
+  speechGen++;
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
 }
 
