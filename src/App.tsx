@@ -6,7 +6,7 @@ import { EXAMINERS } from './data/examiners';
 import { loadHistory, loadSettings, saveHistory, saveSettings } from './lib/settings';
 import { ServerStatus, canUseClaude, fetchStatus, generateReport, EvalResult } from './lib/api';
 import { setSfxEnabled, playSfx, unlockAudio } from './lib/sfx';
-import { AbortedError, speak, stopSpeaking } from './lib/speech';
+import { AbortedError, speak, stopSpeaking, unlockSpeech } from './lib/speech';
 import { PASS_LINE, scoreAttitude } from './lib/scoring';
 import { Bridge, CardState, FeedbackAction, runInterview } from './engine/interview';
 import { HomeScreen } from './components/HomeScreen';
@@ -130,6 +130,7 @@ export default function App() {
   const start = async (c: ExamCard) => {
     unlockAudio();
     stopInterview();
+    unlockSpeech();
     resetLive();
     setCard(c);
     setShowJa(settings.mode === 'practice');
