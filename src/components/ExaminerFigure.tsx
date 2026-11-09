@@ -126,6 +126,8 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
   const eyeH = meta.eyeWidth * 0.6;
   const mouthBoxW = meta.mouthWidth * 1.3;
   const mouthBoxH = mouthBoxW * (40 / 60);
+  // 開いた口の内側形状（中身・クリップ・唇輪郭で共用）
+  const mouthPath = `M${15 - mouthOpen * 2},19 Q30,${17 - mouthOpen * 2} ${45 + mouthOpen * 2},19 Q30,${21 + mouthOpen * 24} ${15 - mouthOpen * 2},19 Z`;
 
   // ハイクオリティ画像アバター
   if (avatarSrc && !imgError) {
@@ -133,7 +135,7 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
       <div className="relative flex h-full w-full items-center justify-center select-none">
         {/* 聞き取り中（listening）の波紋エフェクト */}
         {listening && (
-          <div className="absolute inset-1 -z-10 animate-ping rounded-3xl bg-emerald-400/30 duration-1000" />
+          <div className="absolute inset-1 -z-10 animate-ping motion-reduce:animate-none rounded-3xl bg-emerald-400/30 duration-1000" />
         )}
 
         <div
@@ -192,6 +194,10 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
                     <filter id={`mouth-soft-${examiner.id}`} x="-20%" y="-20%" width="140%" height="140%">
                       <feGaussianBlur stdDeviation="1.2" />
                     </filter>
+                    {/* 舌・歯が口の外にはみ出さないよう口内形状でクリップ */}
+                    <clipPath id={`mouth-clip-${examiner.id}`}>
+                      <path d={mouthPath} />
+                    </clipPath>
                   </defs>
                   {/* 元イラストの口を隠す肌色カバー（縁をぼかして馴染ませる） */}
                   <ellipse cx="30" cy="20" rx="27" ry="15" fill={meta.skin} filter={`url(#mouth-soft-${examiner.id})`} />
@@ -202,20 +208,25 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
                   ) : (
                     <>
                       {/* 開いた口の中 */}
-                      <path
-                        d={`M${15 - mouthOpen * 2},19 Q30,${17 - mouthOpen * 2} ${45 + mouthOpen * 2},19 Q30,${21 + mouthOpen * 24} ${15 - mouthOpen * 2},19 Z`}
-                        fill={meta.inside}
-                      />
+                      <path d={mouthPath} fill={meta.inside} />
                       {/* 上の歯 */}
                       <path
                         d={`M${18 - mouthOpen},${19 - mouthOpen * 0.5} Q30,${17.5 - mouthOpen} ${42 + mouthOpen},${19 - mouthOpen * 0.5} Q30,${21 + mouthOpen * 2} ${18 - mouthOpen},${19 - mouthOpen * 0.5} Z`}
                         fill="#ffffff"
+                        clipPath={`url(#mouth-clip-${examiner.id})`}
                       />
                       {/* 舌 */}
-                      <ellipse cx="30" cy={20 + mouthOpen * 13} rx={6 + mouthOpen * 3} ry={1.5 + mouthOpen * 2.5} fill="#d96a6a" />
+                      <ellipse
+                        cx="30"
+                        cy={20 + mouthOpen * 11}
+                        rx={6 + mouthOpen * 3}
+                        ry={1.5 + mouthOpen * 2.5}
+                        fill="#d96a6a"
+                        clipPath={`url(#mouth-clip-${examiner.id})`}
+                      />
                       {/* 唇の輪郭 */}
                       <path
-                        d={`M${15 - mouthOpen * 2},19 Q30,${17 - mouthOpen * 2} ${45 + mouthOpen * 2},19 Q30,${21 + mouthOpen * 24} ${15 - mouthOpen * 2},19 Z`}
+                        d={mouthPath}
                         stroke={meta.lip}
                         strokeWidth="1.8"
                         strokeLinejoin="round"
@@ -237,7 +248,7 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
               {[0, 1, 2].map((i) => (
                 <span
                   key={i}
-                  className="w-1 rounded-full bg-indigo-400 animate-pulse"
+                  className="w-1 rounded-full bg-indigo-400 animate-pulse motion-reduce:animate-none"
                   style={{
                     height: `${8 + Math.round(mouthOpen * 12) * (i === 1 ? 1.4 : 0.9)}px`,
                     animationDelay: `${i * 0.15}s`,
@@ -250,7 +261,7 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
           {/* 傾聴中（listening）のインジケーター */}
           {listening && (
             <div className="absolute bottom-6 right-3 flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-lg backdrop-blur-sm">
-              <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+              <span className="h-2 w-2 rounded-full bg-white animate-ping motion-reduce:animate-none" />
               Listening
             </div>
           )}
@@ -303,7 +314,7 @@ export const ExaminerFigure: React.FC<{ examiner: ExaminerProfile; speaking: boo
       ) : (
         <path d="M89,92 Q100,101 111,92" stroke="#7f1d1d" strokeWidth="3" fill="none" strokeLinecap="round" />
       )}
-      {listening && <circle cx="100" cy="70" r="46" fill="none" stroke="#22c55e" strokeWidth="2" opacity="0.4" className="animate-ping" style={{ transformBox: "fill-box", transformOrigin: "center" }} />}
+      {listening && <circle cx="100" cy="70" r="46" fill="none" stroke="#22c55e" strokeWidth="2" opacity="0.4" className="animate-ping motion-reduce:animate-none" style={{ transformBox: "fill-box", transformOrigin: "center" }} />}
     </svg>
   );
 };
