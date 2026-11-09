@@ -362,7 +362,7 @@ export default function App() {
                           {[0, 1, 2, 3, 4].map((i) => (
                             <span
                               key={i}
-                              className={`w-1 rounded-full ${speaking ? 'animate-pulse bg-indigo-500' : 'bg-slate-300'}`}
+                              className={`w-1 rounded-full ${speaking ? 'animate-pulse motion-reduce:animate-none bg-indigo-500' : 'bg-slate-300'}`}
                               style={{ height: speaking ? `${[40, 80, 100, 70, 50][i]}%` : '25%', animationDelay: `${i * 0.12}s` }}
                             />
                           ))}
