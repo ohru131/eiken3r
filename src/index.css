@@ -41,3 +41,45 @@ html {
 .animate-spin-slow {
   animation: spinSlow 12s linear infinite;
 }
+
+@keyframes examinerTalk {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-2px) rotate(0.4deg);
+  }
+  75% {
+    transform: translateY(1.5px) rotate(-0.3deg);
+  }
+}
+
+@keyframes examinerListen {
+  0%, 100% {
+    transform: translateY(0) scale(1.015);
+  }
+  50% {
+    transform: translateY(2.5px) scale(1.02);
+  }
+}
+
+@keyframes examinerIdle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+
+.animate-examiner-talk {
+  animation: examinerTalk 0.5s ease-in-out infinite;
+}
+
+.animate-examiner-listen {
+  animation: examinerListen 2.2s ease-in-out infinite;
+}
+
+.animate-examiner-idle {
+  animation: examinerIdle 4s ease-in-out infinite;
+}
