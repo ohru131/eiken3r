@@ -117,9 +117,8 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
           return (
             <div
               key={k}
-              className={`overflow-hidden rounded-2xl border-l-4 border border-slate-200 bg-white shadow-sm ${
-                sc >= 4 ? 'border-l-emerald-400' : sc >= 3 ? 'border-l-amber-400' : 'border-l-rose-400'
-              }`}
+              className={`overflow-hidden rounded-2xl border-l-4 border border-slate-200 bg-white shadow-sm ${sc >= 4 ? 'border-l-emerald-400' : sc >= 3 ? 'border-l-amber-400' : 'border-l-rose-400'
+                }`}
             >
               <button onClick={() => toggle(k)} aria-expanded={isOpen} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-indigo-50/50">
                 <div className="w-28 shrink-0 text-xs font-black text-slate-700">{ITEM_LABELS[k]}</div>
@@ -141,7 +140,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                     <div>
                       <div className="mb-1 text-[12px] font-bold text-slate-500">イラスト</div>
                       <div className="max-w-md">
-                        <SceneIllustration scene={card.scene} />
+                        <SceneIllustration scene={card.scene} cardId={card.id} />
                       </div>
                     </div>
                   )}

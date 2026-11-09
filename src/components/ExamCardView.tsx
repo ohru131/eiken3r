@@ -40,7 +40,7 @@ export const ExamCardView: React.FC<Props> = ({ card, state, timer, showTranslat
           {/* 大画面では残りの高さに収まるよう、縦横比 5:3 を保ったまま縮める */}
           <div className="mt-3 flex justify-center lg:min-h-[140px] lg:flex-1 lg:[container-type:size]">
             <div className="w-full lg:w-[min(100cqw,calc(100cqh*5/3))]">
-              <SceneIllustration scene={card.scene} />
+              <SceneIllustration scene={card.scene} cardId={card.id} />
             </div>
           </div>
         </div>

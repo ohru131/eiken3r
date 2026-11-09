@@ -40,6 +40,8 @@ export interface Scene {
   items: SceneItem[];
   /** イラストの英語説明（AI採点用。画面には出さない） */
   description: string;
+  /** イラスト画像ファイルのパス（例: /images/cards/card-01.png） */
+  image?: string;
 }
 
 export interface VocabularyHelp {

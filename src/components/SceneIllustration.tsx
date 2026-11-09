@@ -41,7 +41,7 @@ const BG: Record<SceneBackground, BgDef> = {
     floorY: 70,
     decor: (
       <>
-        
+
         <polygon points="0,170 90,60 180,170" fill="#64748b" />
         <polygon points="70,84 90,60 110,84" fill="#f8fafc" />
         <polygon points="140,170 250,45 360,170" fill="#475569" />
@@ -56,7 +56,7 @@ const BG: Record<SceneBackground, BgDef> = {
     floorY: 66,
     decor: (
       <>
-        
+
         {cloud(90, 35)}
         <rect x="0" y="120" width="400" height="40" fill="#38bdf8" />
         <path d="M0,158 Q50,150 100,158 T200,158 T300,158 T400,158 L400,165 L0,165Z" fill="#e0f2fe" />
@@ -200,7 +200,7 @@ const BG: Record<SceneBackground, BgDef> = {
     floorY: 62,
     decor: (
       <>
-        
+
         <rect x="230" y="30" width="160" height="110" fill="#f1f5f9" stroke="#94a3b8" />
         {clock(310, 55, 12)}
         {[245, 285, 325, 355].map((x) => (
@@ -231,7 +231,7 @@ const BG: Record<SceneBackground, BgDef> = {
     floorY: 62,
     decor: (
       <>
-        
+
         {Array.from({ length: 20 }).map((_, i) => (
           <rect key={i} x={i * 20 + 4} y="110" width="5" height="50" fill="#78716c" />
         ))}
@@ -348,7 +348,31 @@ const Thought: React.FC<{ emoji: string }> = ({ emoji }) => (
   </div>
 );
 
-export const SceneIllustration: React.FC<{ scene: Scene; className?: string }> = ({ scene, className = '' }) => {
+export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; className?: string }> = ({ scene, cardId, className = '' }) => {
+  const [imgError, setImgError] = React.useState(false);
+
+  // 画像が指定されているか、または cardId から自動特定
+  const rawSrc = scene.image || (cardId ? `/images/cards/${cardId}.png` : undefined);
+
+  // 画像が利用可能で、読み込みエラーが発生していない場合は画像を表示
+  if (rawSrc && !imgError) {
+    const base = import.meta.env.BASE_URL || '/';
+    const src = rawSrc.startsWith('/') ? `${base.endsWith('/') ? base : base + '/'}${rawSrc.slice(1)}` : rawSrc;
+
+    return (
+      <div
+        className={`relative w-full aspect-[5/3] overflow-hidden rounded-xl border-2 border-slate-800/80 bg-white ${className}`}
+      >
+        <img
+          src={src}
+          alt={scene.description || 'Illustration'}
+          onError={() => setImgError(true)}
+          className="h-full w-full object-cover"
+        />
+      </div>
+    );
+  }
+
   const bg = BG[scene.background] || BG.park;
   const floorTop = (bg.floorY / 100) * 240;
   let personIdx = 0;

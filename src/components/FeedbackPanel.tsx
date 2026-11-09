@@ -63,7 +63,7 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
       if (readModelAnswer && modelText) {
         setSpeakingModel(true);
         await new Promise((res) => setTimeout(res, 700));
-        if (alive) await onSpeak(modelText).catch(() => {});
+        if (alive) await onSpeak(modelText).catch(() => { });
         if (alive) setSpeakingModel(false);
       }
     });
@@ -135,7 +135,7 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
         {rec.item === 'reading' && <ModelReading card={card} onSpeak={onSpeak} />}
         {(rec.item === 'q2' || rec.item === 'q3') && (
           <div className="max-w-sm">
-            <SceneIllustration scene={card.scene} />
+            <SceneIllustration scene={card.scene} cardId={card.id} />
           </div>
         )}
 
@@ -210,9 +210,8 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; onS
   <div className="space-y-2.5">
     <div className="flex items-center gap-2">
       <span
-        className={`rounded-full px-2.5 py-0.5 text-xs font-black ${
-          fb.score >= 5 ? 'bg-emerald-100 text-emerald-800' : fb.score >= 3 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-        }`}
+        className={`rounded-full px-2.5 py-0.5 text-xs font-black ${fb.score >= 5 ? 'bg-emerald-100 text-emerald-800' : fb.score >= 3 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+          }`}
       >
         {fb.verdict}
       </span>
