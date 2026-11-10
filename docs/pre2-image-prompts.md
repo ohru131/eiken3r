@@ -322,3 +322,268 @@ Scene: a home office.
 A man in the center sits alone at a desk with a laptop, resting his chin on his hand and looking lonely.
 Thought bubble: an office building with coworkers waving.
 ```
+
+
+### pre2-13 Cashless Payments（キャッシュレス決済）
+
+**イラストA** → `public/images/pre2/pre2-13-a.png`
+
+```
+Scene: a modern grocery store with shelves of food in the background.
+From left to right:
+1. A woman is scanning a QR code on a stand with her smartphone.
+2. A man is putting groceries into an eco-bag.
+3. A boy is looking at a paper receipt.
+4. A girl is choosing some red apples from a fruit box.
+5. An old man is holding a green shopping basket.
+```
+
+**イラストB** → `public/images/pre2/pre2-13-b.png`
+
+```
+Scene: an outdoor street vegetable stand with wooden crates of vegetables.
+A man in the center holds a credit card and looks puzzled at a sign that shows only cash icons (coins and paper bills).
+Thought bubble: an ATM cash machine with a bank logo.
+```
+
+### pre2-14 Solar Energy（太陽光エネルギー）
+
+**イラストA** → `public/images/pre2/pre2-14-a.png`
+
+```
+Scene: a bright community garden with flower beds and small green trees.
+From left to right:
+1. A woman is watering some flowers with a garden hose.
+2. A boy is taking a picture of a flower with his smartphone.
+3. A man is sweeping dry leaves with a broom.
+4. A girl is carrying a small flowerpot.
+5. An old woman is picking red tomatoes from a vine.
+```
+
+**イラストB** → `public/images/pre2/pre2-14-b.png`
+
+```
+Scene: a sunny public park with green grass.
+A girl in the center sits on a wooden bench under the dark shade of a large leafy tree, looking worriedly at her smartphone connected to a small foldable solar panel that is not charging.
+Thought bubble: a bright, sunny grassy area with warm sunbeams.
+```
+
+### pre2-15 Smartphones in School（学校でのスマートフォン利用）
+
+**イラストA** → `public/images/pre2/pre2-15-a.png`
+
+```
+Scene: a clean school science classroom with lab tables and a whiteboard.
+From left to right:
+1. A boy is looking through a microscope on a table.
+2. A girl is writing notes in her open notebook with a pen.
+3. A male student is washing a glass test tube at a sink.
+4. A female teacher is pointing at diagrams on a whiteboard.
+5. Another student is packing textbooks into a backpack.
+```
+
+**イラストB** → `public/images/pre2/pre2-15-b.png`
+
+```
+Scene: a high school classroom during study time.
+A boy in the center sits at his desk holding a smartphone that shows a red empty battery icon on a black screen.
+Thought bubble: a smiling classmate holding up a white smartphone charging cable and plug.
+```
+
+### pre2-16 Community Sports Clubs（地域のスポーツクラブ）
+
+**イラストA** → `public/images/pre2/pre2-16-a.png`
+
+```
+Scene: a bright indoor fitness gym with mirrors and sports equipment.
+From left to right:
+1. A woman is running on a treadmill.
+2. A man is lifting two heavy dumbbells.
+3. A girl is stretching her arms on a blue yoga mat.
+4. A boy is drinking water from a sports bottle.
+5. An old man is riding a stationary exercise bicycle.
+```
+
+**イラストB** → `public/images/pre2/pre2-16-b.png`
+
+```
+Scene: an outdoor community tennis court with a green fence and net.
+A woman in sports clothes in the center holds up a tennis racket with snapped, broken strings and looks distressed.
+Thought bubble: a sports club coach handing her a fresh spare tennis racket.
+```
+
+### pre2-17 Food Delivery Apps（フードデリバリーアプリ）
+
+**イラストA** → `public/images/pre2/pre2-17-a.png`
+
+```
+Scene: a cheerful family restaurant dining hall with tables and booths.
+From left to right:
+1. A waiter in a uniform is carrying a plate of spaghetti on a tray.
+2. A woman is taking a picture of her meal with her smartphone.
+3. A man is pouring water from a glass pitcher into a cup.
+4. A girl is eating a cup of ice cream with a small spoon.
+5. An old man is reading an open restaurant menu.
+```
+
+**イラストB** → `public/images/pre2/pre2-17-b.png`
+
+```
+Scene: a modern living room at home.
+A hungry young man in the center sits on a sofa, pointing anxiously at a wall clock that shows 1:30 PM with an empty dining table in front of him.
+Thought bubble: a smartphone screen showing a phone call connecting to a pizza restaurant.
+```
+
+### pre2-18 Public Transportation（公共交通機関の利用）
+
+**イラストA** → `public/images/pre2/pre2-18-a.png`
+
+```
+Scene: an open train station platform with railway tracks and safety gates.
+From left to right:
+1. A woman is looking up at a digital train schedule board.
+2. A businessman in a suit is drinking canned coffee.
+3. A boy is listening to music with headphones over his ears.
+4. A girl is pulling a rolling suitcase behind her.
+5. An old woman is sitting on a station bench reading a paperback book.
+```
+
+**イラストB** → `public/images/pre2/pre2-18-b.png`
+
+```
+Scene: an outdoor bus stop under pouring heavy rain with dark rain clouds.
+A commuter in a raincoat holding an umbrella reads a bus timetable notice showing big delay marks.
+Thought bubble: a yellow taxi cab driving by with a taxi light on its roof.
+```
+
+### pre2-19 Self-Checkout Machines（セルフレジ）
+
+**イラストA** → `public/images/pre2/pre2-19-a.png`
+
+```
+Scene: a bright supermarket food section with produce stands.
+From left to right:
+1. A man is taking a carton of milk from an open refrigerated shelf.
+2. A boy is pushing a wire shopping cart loaded with cereal.
+3. A woman is weighing a bag of oranges on a digital scale.
+4. A girl is checking items on a paper shopping list.
+5. An old woman is carrying a red shopping basket on her arm.
+```
+
+**イラストB** → `public/images/pre2/pre2-19-b.png`
+
+```
+Scene: a self-checkout station inside a convenience store.
+An elderly woman in the center holds a canned drink next to a scanner screen displaying a red exclamation mark and warning icon.
+Thought bubble: a friendly female store clerk in a uniform raising her hand to assist.
+```
+
+### pre2-20 Traditional Crafts（伝統工芸の体験）
+
+**イラストA** → `public/images/pre2/pre2-20-a.png`
+
+```
+Scene: a traditional Japanese artisan craft studio with wooden workbenches.
+From left to right:
+1. A young woman is shaping a wet clay pot on a rotating pottery wheel.
+2. A boy is painting a wooden doll with a fine watercolor brush.
+3. A man is cutting sheets of colorful origami paper with scissors.
+4. A girl is proudly showing a finished ceramic tea bowl to an instructor.
+5. An old master is hanging freshly indigo-dyed blue cloths on a bamboo drying rack.
+```
+
+**イラストB** → `public/images/pre2/pre2-20-b.png`
+
+```
+Scene: a cozy living room with a wooden table.
+A girl in the center sits at a table looking down sadly at a cracked, broken handmade ceramic cup in two pieces.
+Thought bubble: a tube of craft super glue with a small repair brush.
+```
+
+### pre2-21 Flea Market Apps（フリマアプリの活用）
+
+**イラストA** → `public/images/pre2/pre2-21-a.png`
+
+```
+Scene: a bustling outdoor park flea market with display blankets and folding tables.
+From left to right:
+1. A woman is hanging winter jackets neatly on a portable garment rack.
+2. A man is sticking price tag labels onto comic books.
+3. A young boy is happily examining a retro toy robot on a table.
+4. A teenage girl is taking a clear photo of a leather handbag with her smartphone.
+5. An old woman is handing silver coins to a smiling seller.
+```
+
+**イラストB** → `public/images/pre2/pre2-21-b.png`
+
+```
+Scene: a bedroom with a wide open closet.
+A woman in the center stands with hands on her hips, looking overwhelmed at an overcrowded wardrobe bursting with unworn clothes.
+Thought bubble: a smartphone screen displaying a flea market app with a photo listing ready to upload.
+```
+
+### pre2-22 AI in Daily Life（日常生活のAI）
+
+**イラストA** → `public/images/pre2/pre2-22-a.png`
+
+```
+Scene: a brightly lit electronics retail store with display counters.
+From left to right:
+1. A man is trying on sleek wireless over-ear headphones.
+2. A boy is tapping icons on a display tablet computer screen.
+3. A woman is asking a store clerk in a polo shirt questions about a camera.
+4. A girl is watching a circular robotic vacuum cleaner glide across the floor.
+5. An old man is inspecting a compact portable radio.
+```
+
+**イラストB** → `public/images/pre2/pre2-22-b.png`
+
+```
+Scene: a European-style outdoor sidewalk cafe.
+A Japanese tourist boy in the center looks baffled while holding a paper dinner menu written entirely in a foreign language.
+Thought bubble: a smartphone camera screen translating foreign menu text into Japanese characters in real time.
+```
+
+### pre2-23 Healthy School Lunches（健康的な学校給食）
+
+**イラストA** → `public/images/pre2/pre2-23-a.png`
+
+```
+Scene: an orderly elementary school lunchroom with student desks.
+From left to right:
+1. A girl wearing a white apron and chef hat is serving vegetable soup with a metal ladle.
+2. A boy is carefully carrying a lunch tray with bread and a milk carton.
+3. A female student is wiping a wooden desk clean with a wet white cloth.
+4. A male student is opening the paper spout of a small milk carton.
+5. A male teacher is distributing clean paper napkins to smiling students.
+```
+
+**イラストB** → `public/images/pre2/pre2-23-b.png`
+
+```
+Scene: a school hallway lined with lockers.
+A student in soccer uniform in the center leans against a wall looking hungry and exhausted, holding an empty lunchbox.
+Thought bubble: a fresh yellow banana and a bottle of mineral water at the school cafeteria kiosk.
+```
+
+### pre2-24 Disaster Preparedness（災害への備え）
+
+**イラストA** → `public/images/pre2/pre2-24-a.png`
+
+```
+Scene: a spacious school gymnasium set up as an emergency disaster shelter.
+From left to right:
+1. A man is carrying a heavy cardboard box of bottled drinking water.
+2. A woman is spreading out a blue waterproof tarp and sleeping mat on the floor.
+3. A boy is turning the dial on a battery-powered portable radio to tune into emergency news.
+4. A girl is pointing at an evacuation route map taped to the gymnasium wall.
+5. An old woman is distributing folded wool blankets to seated families.
+```
+
+**イラストB** → `public/images/pre2/pre2-24-b.png`
+
+```
+Scene: a dark living room during a nighttime typhoon with rain streaking across the window outside.
+A girl in the center stands in the dim room with lamps turned off because of a blackout, holding her hands out blindly.
+Thought bubble: an orange emergency backpack with a bright flashlight turned on.
+```

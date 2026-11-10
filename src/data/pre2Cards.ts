@@ -3,6 +3,7 @@
 // 画像が無い間は scene.items の絵文字で描いた仮イラストを表示する。作成用プロンプトは docs/pre2-image-prompts.md
 import type { ExamCard } from '../types';
 import { PRE2_CARDS_2 } from './pre2Cards2';
+import { PRE2_CARDS_3 } from './pre2Cards3';
 
 const BASE: ExamCard[] = [
   {
@@ -139,4 +140,4 @@ const BASE: ExamCard[] = [
   },
 ];
 
-export const PRE2_CARDS: ExamCard[] = [...BASE, ...PRE2_CARDS_2];
+export const PRE2_CARDS: ExamCard[] = [...BASE, ...PRE2_CARDS_2, ...PRE2_CARDS_3];
