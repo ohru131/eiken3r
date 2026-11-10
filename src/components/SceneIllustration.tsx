@@ -348,13 +348,22 @@ const Thought: React.FC<{ emoji: string }> = ({ emoji }) => (
   </div>
 );
 
-/** 左上の「A」「B」ラベル（準2級のイラストA/B） */
+/** 左上の「A」「B」ラベル（準2級のイラストA/B）、「1」〜「3」（2級のコマ番号） */
 const PictureLabel: React.FC<{ label?: string }> = ({ label }) =>
   label ? (
     <div className="absolute left-1.5 top-1.5 z-[200] rounded-md border-2 border-slate-800 bg-white px-1.5 text-sm font-black leading-tight text-slate-900">{label}</div>
   ) : null;
 
-export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; className?: string; label?: string }> = ({ scene, cardId, className = '', label }) => {
+/** 枠の縦横比。wide = 5:3（3級・準2級）、panel = 4:3（2級の1コマ） */
+const ASPECT = { wide: 'aspect-[5/3]', panel: 'aspect-[4/3]' } as const;
+
+export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; className?: string; label?: string; aspect?: keyof typeof ASPECT }> = ({
+  scene,
+  cardId,
+  className = '',
+  label,
+  aspect = 'wide',
+}) => {
   const [imgError, setImgError] = React.useState(false);
   React.useEffect(() => setImgError(false), [scene.image, cardId]);
 
@@ -368,7 +377,7 @@ export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; classN
 
     return (
       <div
-        className={`relative w-full aspect-[5/3] overflow-hidden rounded-xl border-2 border-slate-800/80 bg-white ${className}`}
+        className={`relative w-full ${ASPECT[aspect]} overflow-hidden rounded-xl border-2 border-slate-800/80 bg-white ${className}`}
       >
         <img
           src={src}
@@ -386,7 +395,7 @@ export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; classN
   let personIdx = 0;
   return (
     <div
-      className={`relative w-full aspect-[5/3] overflow-hidden rounded-xl border-2 border-slate-800/80 bg-white ${className}`}
+      className={`relative w-full ${ASPECT[aspect]} overflow-hidden rounded-xl border-2 border-slate-800/80 bg-white ${className}`}
       style={{ containerType: 'inline-size' }}
     >
       <svg viewBox="0 0 400 240" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
@@ -405,7 +414,7 @@ export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; classN
       </svg>
       <PictureLabel label={label} />
       {scene.image && (
-        // 画像ファイル未配置 → 絵文字の仮イラスト（docs/pre2-image-prompts.md で作成）
+        // 画像ファイル未配置 → 絵文字の仮イラスト（docs/pre2-image-prompts.md / docs/grade2-image-prompts.md で作成）
         <div className="absolute right-1.5 top-1.5 z-[200] rounded bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-black text-amber-950" title={`${scene.image} が見つからないため仮イラストを表示中`}>
           仮イラスト
         </div>

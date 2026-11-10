@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Award, RotateCcw, Home, ChevronDown, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import { AnswerRecord, ExamCard, FinalReport, ScoredItem } from '../types';
-import { PASS_LINE } from '../lib/scoring';
-import { hasFollowUp, itemLabel, sceneFor } from '../lib/grade';
+import { getQuestion, hasFollowUp, itemLabel, maxScore, sceneFor, scoreOutOf5, scoredItems, storyFor } from '../lib/grade';
 import { FeedbackBody, ScoreDots } from './FeedbackPanel';
 import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
 import { Achievement, ScoreHero } from './ScoreHero';
 import { SceneIllustration } from './SceneIllustration';
+import { StoryStrip } from './StoryStrip';
 
 interface Props {
   card: ExamCard;
@@ -20,16 +20,15 @@ interface Props {
   achievements: Achievement[];
 }
 
-const ORDER: ScoredItem[] = ['reading', 'q1', 'q2', 'q3', 'q4', 'q5'];
-
 export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, onSpeak, onRetry, onNext, onHome, achievements }) => {
+  const ORDER = scoredItems(card);
   const [open, setOpen] = useState<Set<ScoredItem>>(new Set());
   const initialized = useRef(false);
   // 結果が出たら、点数が低い設問（3点以下）を最初から開いておく
   useEffect(() => {
     if (report && !initialized.current) {
       initialized.current = true;
-      setOpen(new Set(ORDER.filter((k) => report.scores[k] <= 3)));
+      setOpen(new Set(ORDER.filter((k) => scoreOutOf5(report.scores[k], maxScore(card, k)) <= 3)));
     }
   }, [report]);
   const toggle = (k: ScoredItem) =>
@@ -112,10 +111,12 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
         </div>
         {ORDER.map((k) => {
           const rec = records.find((r) => r.item === k);
-          const q = k === 'reading' ? null : card[k];
+          const q = getQuestion(card, k);
           const pic = sceneFor(card, k);
+          const story = storyFor(card, k);
           const isOpen = open.has(k);
-          const sc = report.scores[k];
+          const max = maxScore(card, k);
+          const sc = scoreOutOf5(report.scores[k], max);
           return (
             <div
               key={k}
@@ -125,7 +126,11 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
               <button onClick={() => toggle(k)} aria-expanded={isOpen} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-indigo-50/50">
                 <div className="w-28 shrink-0 text-xs font-black text-slate-700">{itemLabel(card, k)}</div>
                 <div className="min-w-0 flex-1 truncate text-sm text-slate-600">{[rec?.answer, rec?.followUpAnswer].filter(Boolean).join(' / ') || '（無回答）'}</div>
-                <ScoreDots score={report.scores[k]} />
+                <ScoreDots score={report.scores[k]} max={max} />
+                <span className="w-9 shrink-0 text-right text-xs font-black tabular-nums text-slate-700">
+                  {report.scores[k]}
+                  <span className="font-normal text-slate-400">/{max}</span>
+                </span>
                 <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-indigo-700">
                   {isOpen ? '閉じる' : '詳しく'}
                   <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -146,6 +151,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                       </div>
                     </div>
                   )}
+                  {story && <StoryStrip card={card} story={story} className="max-w-2xl" />}
                   {k === 'q1' && (
                     <div className="rounded-lg border border-slate-200 bg-[#fffef8] p-3">
                       <div className="mb-0.5 text-[12px] font-bold text-slate-500">パッセージ</div>
@@ -166,7 +172,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                   </div>
                   {rec?.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}
                   {!rec?.pronunciation && rec?.pronunciationNote && <PronunciationNote note={rec.pronunciationNote} />}
-                  {rec?.feedback && <FeedbackBody fb={rec.feedback} onSpeak={onSpeak} />}
+                  {rec?.feedback && <FeedbackBody fb={rec.feedback} max={max} onSpeak={onSpeak} />}
                   {k === 'reading' && <ModelReading card={card} onSpeak={onSpeak} />}
                   {q && (
                     <div className="rounded-lg bg-indigo-50 p-3 text-[14px]">

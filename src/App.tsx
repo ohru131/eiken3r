@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Settings, Square, Subtitles, Languages, Volume2, VolumeX, Sparkles, Maximize, Minimize } from 'lucide-react';
-import { AnswerRecord, AppSettings, ExamCard, FinalReport, HistoryRecord, PhaseId, ScoredItem } from './types';
+import { AnswerRecord, AppSettings, ExamCard, FinalReport, Grade, HistoryRecord, PhaseId, ScoredItem } from './types';
 import { EXAM_CARDS } from './data/examCards';
 import { PRE2_CARDS } from './data/pre2Cards';
-import { GRADES, gradeOf } from './lib/grade';
+import { GRADE2_CARDS } from './data/grade2Cards';
+import { GRADES, gradeOf, historyGrade, maxScore, scoreOutOf5, scoredItems } from './lib/grade';
 import { EXAMINERS } from './data/examiners';
 import { loadHistory, loadSettings, saveHistory, saveSettings } from './lib/settings';
 import { ServerStatus, aiName, canUseAI, fetchStatus, generateReport, EvalResult } from './lib/api';
@@ -24,22 +25,35 @@ import { StrategyGuideModal } from './components/StrategyGuideModal';
 
 type Screen = 'home' | 'interview' | 'report';
 
-const CARDS_BY_GRADE = { '3': EXAM_CARDS, pre2: PRE2_CARDS } as const;
-/** 記録の級（grade 追加前の記録は 3級） */
-const historyGrade = (h: HistoryRecord) => h.grade ?? (h.cardId.startsWith('pre2-') ? 'pre2' : '3');
+const CARDS_BY_GRADE: Record<Grade, ExamCard[]> = { '3': EXAM_CARDS, pre2: PRE2_CARDS, '2': GRADE2_CARDS };
 
-const STEPS: { id: PhaseId[]; label: string }[] = [
+type Step = { id: PhaseId[]; label: string };
+const STEPS_HEAD: Step[] = [
   { id: ['entrance', 'greeting'], label: '入室' },
   { id: ['silent_reading'], label: '黙読' },
   { id: ['reading_aloud'], label: '音読' },
   { id: ['q1'], label: 'No.1' },
-  { id: ['q2'], label: 'No.2' },
-  { id: ['q3'], label: 'No.3' },
-  { id: ['turnover', 'q4'], label: 'No.4' },
-  { id: ['q5'], label: 'No.5' },
-  { id: ['exit', 'scoring'], label: '退室' },
 ];
-const PHASE_ORDER: PhaseId[] = ['idle', 'entrance', 'greeting', 'silent_reading', 'reading_aloud', 'q1', 'q2', 'q3', 'turnover', 'q4', 'q5', 'exit', 'scoring', 'report'];
+const STEPS_TAIL: Step[] = [{ id: ['exit', 'scoring'], label: '退室' }];
+/** 進行バーの段階。2級は No.2 に準備時間があり、No.3 の前にカードを裏返し、No.5 が無い */
+const STEPS_BY_GRADE: Record<Grade, Step[]> = (() => {
+  const five: Step[] = [
+    ...STEPS_HEAD,
+    { id: ['q2'], label: 'No.2' },
+    { id: ['q3'], label: 'No.3' },
+    { id: ['turnover', 'q4'], label: 'No.4' },
+    { id: ['q5'], label: 'No.5' },
+    ...STEPS_TAIL,
+  ];
+  const four: Step[] = [
+    ...STEPS_HEAD,
+    { id: ['q2_prep', 'q2'], label: 'No.2' },
+    { id: ['turnover', 'q3'], label: 'No.3' },
+    { id: ['q4'], label: 'No.4' },
+    ...STEPS_TAIL,
+  ];
+  return { '3': five, pre2: five, '2': four };
+})();
 
 interface PendingFeedback {
   rec: AnswerRecord;
@@ -92,6 +106,9 @@ export default function App() {
   const useClaude = canUseAI(settings, status);
   const ai = aiName(settings);
   const cards = CARDS_BY_GRADE[settings.grade] ?? EXAM_CARDS;
+  const steps = STEPS_BY_GRADE[gradeOf(card)];
+  // 進行バー用: その級の段階を並べた順番（先頭 idle、末尾 report）
+  const phaseOrder = useMemo<PhaseId[]>(() => ['idle', ...steps.flatMap((s) => s.id), 'report'], [steps]);
   // 面接中・結果画面は表示中カードの級、ホームは選択中の級
   const shownGrade = screen === 'home' ? GRADES[settings.grade] ?? GRADES['3'] : GRADES[gradeOf(card)];
   const gradeHistory = useMemo(() => history.filter((h) => historyGrade(h) === settings.grade), [history, settings.grade]);
@@ -188,9 +205,12 @@ export default function App() {
       if (ac.signal.aborted) return;
       const recs = Array.from(recMap.values());
       const scores = { reading: 0, q1: 0, q2: 0, q3: 0, q4: 0, q5: 0 } as Record<ScoredItem, number>;
-      recs.forEach((r) => (scores[r.item] = r.feedback?.score ?? 0));
+      const items = scoredItems(c);
+      recs.forEach((r) => {
+        if (items.includes(r.item)) scores[r.item] = Math.min(maxScore(c, r.item), r.feedback?.score ?? 0);
+      });
       const attitude = scoreAttitude(recs.filter((r) => r.item !== 'reading'), result.greetingAnswered, result.greetingTotal);
-      const total = Object.values(scores).reduce((a, b) => a + b, 0) + attitude;
+      const total = items.reduce((a, k) => a + scores[k], 0) + attitude;
       const passed = total >= PASS_LINE;
 
       const base: FinalReport = {
@@ -217,7 +237,7 @@ export default function App() {
       const nextHistory = [h, ...history];
       const sameGrade = nextHistory.filter((x) => historyGrade(x) === gradeOf(c));
       setAchievements(
-        buildAchievements(base, cardProgress(history, c.id), practiceStreak(nextHistory), passedCardCount(sameGrade), CARDS_BY_GRADE[gradeOf(c)].length)
+        buildAchievements(c, base, cardProgress(history, c.id), practiceStreak(nextHistory), passedCardCount(sameGrade), CARDS_BY_GRADE[gradeOf(c)].length)
       );
       setHistory(nextHistory);
       saveHistory(nextHistory);
@@ -242,7 +262,7 @@ export default function App() {
     start(list[(i + 1) % list.length]);
   };
 
-  const phaseIdx = PHASE_ORDER.indexOf(phase);
+  const phaseIdx = phaseOrder.indexOf(phase);
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-100 text-slate-900">
@@ -317,9 +337,9 @@ export default function App() {
                 {settings.mode === 'exam' ? '本番' : '練習'}
               </span>
               <div className="flex flex-1 items-center gap-1 overflow-x-auto">
-                {STEPS.map((s, i) => {
-                  const firstIdx = PHASE_ORDER.indexOf(s.id[0]);
-                  const lastIdx = PHASE_ORDER.indexOf(s.id[s.id.length - 1]);
+                {steps.map((s, i) => {
+                  const firstIdx = phaseOrder.indexOf(s.id[0]);
+                  const lastIdx = phaseOrder.indexOf(s.id[s.id.length - 1]);
                   const active = phaseIdx >= firstIdx && phaseIdx <= lastIdx;
                   const done = phaseIdx > lastIdx;
                   return (
@@ -344,9 +364,9 @@ export default function App() {
               </button>
             </div>
 
-            <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-12">
+            <div className="grid flex-1 grid-cols-1 gap-3 lg:min-h-0 lg:grid-cols-12">
               {/* examiner side */}
-              <div className="flex flex-col gap-3 lg:col-span-5 lg:min-h-0 lg:overflow-y-auto">
+              <div className="flex min-w-0 flex-col gap-3 lg:col-span-5 lg:min-h-0 lg:overflow-y-auto">
                 <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-200 to-slate-100 shadow-sm">
                   <div className="absolute left-3 top-3 z-10 flex items-center gap-1">
                     <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-bold text-slate-700">{examiner.name}</span>
@@ -406,12 +426,12 @@ export default function App() {
                   hint={hint}
                   interim={interim}
                   silence={silence}
-                  busyLabel={phase === 'silent_reading' ? '黙読中（声に出さずに読みましょう）' : phase === 'scoring' ? '採点中…' : pending ? '解説を確認しましょう' : undefined}
+                  busyLabel={phase === 'silent_reading' ? '黙読中（声に出さずに読みましょう）' : phase === 'q2_prep' ? '準備時間（20秒）：3コマの流れを頭の中で組み立てましょう' : phase === 'scoring' ? '採点中…' : pending ? '解説を確認しましょう' : undefined}
                 />
               </div>
 
               {/* card / feedback side */}
-              <div className="min-h-[420px] lg:col-span-7 lg:h-full lg:min-h-0">
+              <div className="min-h-[420px] min-w-0 lg:col-span-7 lg:h-full lg:min-h-0">
                 {pending ? (
                   <FeedbackPanel
                     key={pending.rec.item + pending.rec.answer}
@@ -425,10 +445,10 @@ export default function App() {
                       stopSpeaking();
                       pending.resolve(a);
                     }}
-                    prevStreak={streakBefore(pending.rec.item, records)}
+                    prevStreak={streakBefore(card, pending.rec.item, records)}
                   />
                 ) : (
-                  <ExamCardView card={card} state={cardState} timer={examMode ? null : timer} showTranslation={showJa && !examMode} />
+                  <ExamCardView card={card} state={cardState} timer={examMode ? null : timer} timerLabel={phase === 'q2_prep' ? '準備' : '黙読'} showTranslation={showJa && !examMode} />
                 )}
               </div>
             </div>
@@ -443,12 +463,12 @@ export default function App() {
 }
 
 /** この設問の直前まで、4点以上が何問続いているか */
-function streakBefore(item: ScoredItem, records: AnswerRecord[]): number {
-  const order: ScoredItem[] = ['reading', 'q1', 'q2', 'q3', 'q4', 'q5'];
+function streakBefore(card: ExamCard, item: ScoredItem, records: AnswerRecord[]): number {
+  const order = scoredItems(card);
   let n = 0;
   for (let i = order.indexOf(item) - 1; i >= 0; i--) {
     const sc = records.find((r) => r.item === order[i])?.feedback?.score;
-    if (sc !== undefined && sc >= 4) n++;
+    if (sc !== undefined && scoreOutOf5(sc, maxScore(card, order[i])) >= 4) n++;
     else break;
   }
   return n;

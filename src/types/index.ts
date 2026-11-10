@@ -79,8 +79,25 @@ export interface Question5 extends CardQuestion, FollowUp {}
 /** No.4: 3級は通常の質問、準2級は Yes/No + Why?/Why not? */
 export type Question4 = CardQuestion & Partial<FollowUp>;
 
-/** 級。'3' = 3級、'pre2' = 準2級 */
-export type Grade = '3' | 'pre2';
+/** 級。'3' = 3級、'pre2' = 準2級、'2' = 2級 */
+export type Grade = '3' | 'pre2' | '2';
+
+/** 2級 No.2 の3コマ漫画の1コマ */
+export interface StoryPanel {
+  /** コマの上に書かれる時間・場面の言葉（2・3コマ目。例: "The next day"） */
+  caption?: string;
+  /** コマの絵。画像は public/images/g2/<カードID>-<コマ番号>.png（無ければ絵文字の仮イラスト） */
+  scene: Scene;
+  /** 吹き出しのセリフ（英語）。コマの下に表示する */
+  speech?: { speaker: string; text: string };
+}
+
+/** 2級 No.2: 3コマ漫画のナレーション */
+export interface Story {
+  /** カードに印字されている書き出しの1文（One day, ...） */
+  firstSentence: string;
+  panels: [StoryPanel, StoryPanel, StoryPanel];
+}
 
 export interface ExamCard {
   id: string;
@@ -90,18 +107,20 @@ export interface ExamCard {
   japaneseTitle: string;
   category: string;
   level: 'basic' | 'standard' | 'challenge';
-  passage: string; // 30〜40語程度の英文
+  passage: string; // 3級: 30〜40語 / 準2級: 約50語 / 2級: 約60語
   passageJa: string;
   vocabulary: VocabularyHelp[];
-  /** 3級: イラスト / 準2級: イラストA（人物5人の動作） */
-  scene: Scene;
+  /** 3級: イラスト / 準2級: イラストA（人物5人の動作） / 2級: story を使うので不要 */
+  scene?: Scene;
   /** 準2級のみ: イラストB（人物の状況説明） */
   sceneB?: Scene;
+  /** 2級のみ: 3コマ漫画（No.2） */
+  story?: Story;
   q1: CardQuestion; // パッセージについて
-  q2: CardQuestion; // 3級: イラスト / 準2級: イラストAの5人の動作
-  q3: CardQuestion; // 3級: イラスト / 準2級: イラストBの状況
-  q4: Question4; // 3級: 受験者自身 / 準2級: 意見（Yes/No + Why?）
-  q5: Question5; // 受験者自身・意見 (Yes/No + 追加質問)
+  q2: CardQuestion; // 3級: イラスト / 準2級: イラストAの5人の動作 / 2級: 3コマ漫画のナレーション（10点）
+  q3: CardQuestion; // 3級: イラスト / 準2級: イラストBの状況 / 2級: 意見（I agree / I disagree）
+  q4: Question4; // 3級: 受験者自身 / 準2級・2級: 意見（Yes/No + Why?）
+  q5?: Question5; // 受験者自身・意見 (Yes/No + 追加質問)。2級には無い
 }
 
 // ===== 面接官 =====
@@ -129,6 +148,7 @@ export type PhaseId =
   | 'silent_reading'
   | 'reading_aloud'
   | 'q1'
+  | 'q2_prep'
   | 'q2'
   | 'q3'
   | 'turnover'
@@ -141,7 +161,7 @@ export type PhaseId =
 export type ScoredItem = 'reading' | 'q1' | 'q2' | 'q3' | 'q4' | 'q5';
 
 export interface StepFeedback {
-  score: number; // 0-5 (reading also 0-5)
+  score: number; // 0-5（2級の No.2 のみ 0-10）
   verdict: string; // 短い評価ラベル
   goodPoints: string;
   corrections: string;

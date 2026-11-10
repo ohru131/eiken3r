@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { practiceStreak, practicedToday, recentAverage, weekCount } from '../lib/stats';
 import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame } from 'lucide-react';
 import { AppSettings, ExamCard, Grade, HistoryRecord, InterviewMode } from '../types';
-import { GRADES } from '../lib/grade';
+import { GRADES, GRADE_ORDER } from '../lib/grade';
 import { EXAMINERS } from '../data/examiners';
 import { PASS_LINE } from '../lib/scoring';
 
@@ -56,7 +56,7 @@ const ProgressPanel: React.FC<{ history: HistoryRecord[]; allHistory: HistoryRec
           <motion.div
             className="h-full rounded-full bg-gradient-to-r from-emerald-300 to-teal-200"
             initial={{ width: 0 }}
-            animate={{ width: `${(passed / total) * 100}%` }}
+            animate={{ width: `${total ? (passed / total) * 100 : 0}%` }}
             transition={{ duration: 1, delay: 0.2, ease: 'easeOut' }}
           />
         </div>
@@ -111,7 +111,6 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
     setStatusFilter('all');
     onSettings({ ...settings, grade });
   };
-  const pre2 = settings.grade === 'pre2';
   const done = Object.keys(best).length;
   const passedCount = Object.values(best).filter((v) => v >= PASS_LINE).length;
 
@@ -138,7 +137,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
         </div>
         <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">面接の練習をしよう</h2>
         <div className="mt-3 inline-flex rounded-xl bg-white/15 p-1 text-sm font-black" role="tablist" aria-label="級を選ぶ">
-          {(['3', 'pre2'] as const).map((g) => (
+          {GRADE_ORDER.map((g) => (
             <button
               key={g}
               role="tab"
@@ -151,9 +150,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
           ))}
         </div>
         <p className="mt-2 max-w-2xl text-sm text-indigo-50">
-          {pre2
-            ? '音読のあと、パッセージ・イラストA（5人の動作）・イラストB（状況説明）・意見を問う2問の計5問。本番と同じ順番で面接官が質問します。'
-            : '入室から退室まで、本番と同じ順番で面接官が質問します。答え終わって少し待つと、次の質問に進みます。'}
+          {GRADES[settings.grade].intro}
         </p>
         <div className="mt-4 flex flex-wrap gap-2 text-[12px] font-bold">
           {[

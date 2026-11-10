@@ -1,6 +1,6 @@
 import { AnswerRecord, AppSettings, ExamCard, FinalReport, ScoredItem, StepFeedback } from '../types';
 import { getQuestion, localEvaluate } from './scoring';
-import { gradeOf, hasFollowUp, itemLabel, sceneFor } from './grade';
+import { gradeOf, hasFollowUp, itemLabel, maxScore, pictureDescription, scoredItems } from './grade';
 import { summarizeAssessment } from './azurePronunciation';
 import type Anthropic from '@anthropic-ai/sdk';
 
@@ -63,13 +63,14 @@ export async function evaluateAnswer(
     itemLabel: itemLabel(card, rec.item),
     cardTitle: card.title,
     passage: card.passage,
-    sceneDescription: sceneFor(card, rec.item)?.scene.description ?? '',
+    sceneDescription: pictureDescription(card, rec.item),
     question: rec.question,
     modelAnswers: q ? (hasFollowUp(q) ? [...q.modelAnswers, ...q.modelAnswersYes, ...q.modelAnswersNo] : q.modelAnswers) : [card.passage],
     answer: rec.answer,
     followUpQuestion: rec.followUpQuestion,
     followUpAnswer: rec.followUpAnswer,
     pardonUsed: rec.pardonUsed,
+    maxScore: maxScore(card, rec.item),
     pronunciationSummary: rec.pronunciation ? summarizeAssessment(rec.pronunciation) : undefined,
   };
   try {
@@ -93,10 +94,12 @@ export async function generateReport(
   const local = () => localReport(card, records, scores);
   if (!useClaude) return local();
   try {
+    const items = scoredItems(card);
     const body = {
         grade: gradeOf(card),
         cardTitle: card.title,
-        scores,
+        scores: Object.fromEntries(items.map((k) => [k, scores[k]])),
+        maxScores: Object.fromEntries(items.map((k) => [k, maxScore(card, k)])),
         attitude,
         total,
         passLine,
@@ -106,6 +109,7 @@ export async function generateReport(
           answer: x.answer || '(無回答)',
           followUp: x.followUpQuestion ? `${x.followUpQuestion} → ${x.followUpAnswer || '(無回答)'}` : undefined,
           score: x.feedback?.score,
+          maxScore: maxScore(card, x.item),
           latencySec: x.latencySec,
         })),
     };
@@ -117,16 +121,16 @@ export async function generateReport(
 }
 
 function localReport(card: ExamCard, records: AnswerRecord[], scores: Record<ScoredItem, number>) {
-  const entries = Object.entries(scores) as [ScoredItem, number][];
-  const good = entries.filter(([, v]) => v >= 4).map(([k]) => itemLabel(card, k));
-  const weak = entries.filter(([, v]) => v <= 3).map(([k]) => itemLabel(card, k));
+  const entries = scoredItems(card).map((k) => [k, scores[k] / maxScore(card, k)] as const);
+  const good = entries.filter(([, v]) => v >= 0.8).map(([k]) => itemLabel(card, k));
+  const weak = entries.filter(([, v]) => v < 0.8).map(([k]) => itemLabel(card, k));
   return {
     source: 'local' as const,
     summary: `お疲れさまでした。${good.length ? `${good.join('・')}はよくできています。` : ''}${
       weak.length ? `${weak.join('・')}は模範解答を声に出して練習しましょう。` : '全体的に安定しています。'
     }（Claude または Gemini の APIキーを設定すると、あなたの発話に合わせた詳しい講評が表示されます）`,
     strengths: good.length ? good.map((g) => `${g}で的確に答えられた`) : ['最後まで面接を受けきった'],
-    improvements: weak.length ? weak.map((w) => (w === '音読' ? '音読: タイトルから最後まで、区切りを意識してはっきり読む' : `${w}: 主語＋動詞の完全な文で答える`)) : ['No.4・No.5で2文目を足して内容を広げる'],
+    improvements: weak.length ? weak.map((w) => (w === '音読' ? '音読: タイトルから最後まで、区切りを意識してはっきり読む' : `${w}: 主語＋動詞の完全な文で答える`)) : ['意見を答える設問で2文目を足して内容を広げる'],
     nextSteps: '間違えた設問を練習モードでもう一度。模範解答を3回音読してから本番モードに挑戦しましょう。',
   };
 }

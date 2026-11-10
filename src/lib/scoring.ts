@@ -1,18 +1,10 @@
 // APIキーが無い時のローカル簡易採点と、最終スコア計算
-import { AnswerRecord, CardQuestion, ExamCard, ScoredItem, StepFeedback } from '../types';
-import { gradeOf, hasFollowUp } from './grade';
+import { AnswerRecord, ExamCard, StepFeedback } from '../types';
+import { getQuestion, gradeOf, hasFollowUp, maxScore, storyFor } from './grade';
+
+export { getQuestion };
 
 export const PASS_LINE = 20; // 33点満点中の合格目安（約6割）
-
-/** 3級の設問ラベル（級に応じたラベルは grade.ts の itemLabel） */
-export const ITEM_LABELS: Record<ScoredItem, string> = {
-  reading: '音読',
-  q1: 'No.1 パッセージ',
-  q2: 'No.2 イラスト',
-  q3: 'No.3 イラスト',
-  q4: 'No.4 あなた自身',
-  q5: 'No.5 あなた自身',
-};
 
 const STOP = new Set(['a', 'an', 'the', 'is', 'are', 'am', 'to', 'of', 'and', 'in', 'on', 'at', 'it', 'they', 'he', 'she', 'i', 'my', 'their', 'his', 'her', 'do', 'does', 'because', 'by', 'so']);
 
@@ -40,10 +32,6 @@ function overlap(answer: string, target: string): number {
   if (!t.length) return 0;
   const a = new Set(words(answer).map(canon));
   return t.filter((w) => a.has(w)).length / t.length;
-}
-
-export function getQuestion(card: ExamCard, item: ScoredItem): CardQuestion | null {
-  return item === 'reading' ? null : card[item];
 }
 
 export function isYesAnswer(text: string): boolean | null {
@@ -118,15 +106,27 @@ export function localEvaluate(card: ExamCard, rec: AnswerRecord): StepFeedback {
   const models = follow ? [...q.modelAnswers, ...q.modelAnswersYes, ...q.modelAnswersNo] : q.modelAnswers;
   const best = Math.max(...models.map((m) => overlap(answer, m)));
   const hasSubjectVerb = /^(he|she|they|it|there|i|we|because|by|you|the|a|an|my|his|her|yes|no)\b/.test(w[0]) && w.length >= 3;
-  const pre2 = gradeOf(card) === 'pre2';
+  const g = gradeOf(card);
+  const pre2 = g === 'pre2';
+  const max = maxScore(card, rec.item);
+  const story = storyFor(card, rec.item);
   let score: number;
-  if (pre2 && rec.item === 'q2') {
+  if (story) {
+    // 2級 No.2（10点）: 模範ナレーションとの重なりでおおまかに採点。過去形で語れていなければ上限6点
+    score = Math.max(1, Math.min(10, Math.round(best * 12)));
+    if (!/\b(was|were|said|told|asked|suggested|decided)\b/.test(w.join(' '))) score = Math.min(score, 6);
+    if (w.length < 25) score = Math.min(score, 5);
+  } else if (g === '2' && rec.item === 'q3') {
+    // 2級 No.3: 賛成/反対 ＋ 理由2文（約14語以上）
+    const stance = /\b(agree|disagree|think|opinion)\b/.test(w.join(' '));
+    score = w.length >= 14 && stance ? 5 : w.length >= 8 ? 4 : w.length >= 3 ? 3 : 2;
+  } else if (pre2 && rec.item === 'q2') {
     // 準2級 No.2: 5人の動作を進行形（is/are ~ing）で言えた数でおおまかに採点
     const actions = (w.join(' ').match(/\b(?:is|are|'s|he's|she's|they're)\s+\w+ing\b/g) || []).length;
     score = Math.max(1, Math.min(5, actions));
   } else if (rec.item === 'q4' || rec.item === 'q5') {
-    // 準2級は理由を2文（約12語以上）求められる
-    const full = pre2 ? 12 : 8;
+    // 準2級・2級は理由を2文（約12語以上）求められる
+    const full = g === '3' ? 8 : 12;
     score = w.length >= full && hasSubjectVerb ? 5 : w.length >= full / 2 ? 4 : w.length >= 2 ? 3 : 2;
     if (follow && !rec.followUpAnswer) score = Math.min(score, 3);
   } else {
@@ -136,15 +136,24 @@ export function localEvaluate(card: ExamCard, rec: AnswerRecord): StepFeedback {
   return {
     ...base,
     score,
-    verdict: score === 5 ? 'よくできました' : score >= 4 ? 'おしい！' : score >= 3 ? 'あと一歩' : '要復習',
+    verdict: score === max ? 'よくできました' : score >= max * 0.8 ? 'おしい！' : score >= max * 0.6 ? 'あと一歩' : '要復習',
     goodPoints: `「${answer}」と答えました。`,
     corrections:
-      pre2 && rec.item === 'q2' && score < 5
+      story && score < max
+        ? 'カードの1文で始め、各コマを2文ずつ過去形で。矢印の言葉・セリフ・吹き出しの内容に必ず触れましょう。'
+        : g === '2' && rec.item === 'q3' && score < max
+          ? '最初に I agree. / I disagree. を言い、理由を2文で続けましょう。'
+        : pre2 && rec.item === 'q2' && score < 5
         ? '5人全員の動作を「A boy is ~ing.」の形で1文ずつ言いましょう。'
         : hasSubjectVerb
           ? '模範解答と見比べて、足りない語句がないか確認しましょう。'
           : '単語だけでなく、主語＋動詞の「文」で答えましょう。',
-    improvedAnswer: q.modelAnswers[0],
+    // Yes/No の設問は、受験者の立場に合わせた理由つきの模範解答を見せる
+    improvedAnswer: follow
+      ? isYesAnswer(rec.answer) === false
+        ? `No. ${q.modelAnswersNo[0]}`
+        : `Yes. ${q.modelAnswersYes[0]}`
+      : q.modelAnswers[0],
     tip: q.point,
   };
 }

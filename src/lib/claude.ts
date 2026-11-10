@@ -2,7 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
-import { EvaluateInput, FeedbackSchema, ReportInput, ReportSchema, buildEvalPrompt, buildReportPrompt, clampScore } from './prompts';
+import { EvaluateInput, FeedbackSchema, ReportInput, ReportSchema, buildEvalPrompt, buildReportPrompt, clampScore, evalMaxScore } from './prompts';
 
 export const ALLOWED_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const;
 export const DEFAULT_MODEL = 'claude-opus-5-5';
@@ -53,7 +53,7 @@ export type { EvaluateInput, ReportInput } from './prompts';
 export async function evaluateWithClaude(client: Anthropic, model: string, b: EvaluateInput) {
   const p = buildEvalPrompt(b);
   const result = await callStructured(client, normalizeModel(model), p.system, p.user, FeedbackSchema, 2000);
-  return { ...result, score: clampScore(result.score), source: 'claude' as const };
+  return { ...result, score: clampScore(result.score, evalMaxScore(b)), source: 'claude' as const };
 }
 
 export async function reportWithClaude(client: Anthropic, model: string, b: ReportInput) {
