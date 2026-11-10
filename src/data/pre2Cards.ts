@@ -2,6 +2,7 @@
 // イラストは public/images/pre2/<id>-a.png（イラストA）・<id>-b.png（イラストB）を置くと表示される。
 // 画像が無い間は scene.items の絵文字で描いた仮イラストを表示する。作成用プロンプトは docs/pre2-image-prompts.md
 import type { ExamCard } from '../types';
+import { PRE2_CARDS_2 } from './pre2Cards2';
 
 const BASE: ExamCard[] = [
   {
@@ -138,4 +139,4 @@ const BASE: ExamCard[] = [
   },
 ];
 
-export const PRE2_CARDS: ExamCard[] = [...BASE];
+export const PRE2_CARDS: ExamCard[] = [...BASE, ...PRE2_CARDS_2];
