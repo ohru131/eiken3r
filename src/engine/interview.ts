@@ -200,11 +200,13 @@ export async function runInterview(
     // 聞き返されたときに繰り返す文（2級 No.2 は準備時間の案内を省く）
     const repeatText = story ? STORY_REPEAT : q.text;
     const repeatJa = story ? STORY_REPEAT_JA : q.ja;
-    for (;;) {
+    for (let attempt = 0; ; attempt++) {
       let pardonUsed = false;
       bridge.setPhase(item);
-      await say(`${prefix}${q.text}`, q.ja);
-      if (story) {
+      // やり直し（練習モード）では、2級 No.2 の準備時間を繰り返さない
+      if (story && attempt > 0) await say(STORY_REPEAT, STORY_REPEAT_JA);
+      else await say(`${prefix}${q.text}`, q.ja);
+      if (story && attempt === 0) {
         bridge.setPhase('q2_prep');
         await countdown(20);
         bridge.setPhase('q2');
