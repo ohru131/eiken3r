@@ -1,5 +1,6 @@
 import React from 'react';
 import { Grade } from '../types';
+import { GRADES } from '../lib/grade';
 import { X, BookOpen, CheckCircle, HelpCircle, Award, Volume2, Sparkles } from 'lucide-react';
 
 interface StrategyGuideModalProps {
@@ -9,7 +10,9 @@ interface StrategyGuideModalProps {
   onClose: () => void;
 }
 
-const PRE2_STEPS: { title: string; points: string[]; example?: string }[] = [
+type Step = { title: string; points: string[]; example?: string };
+
+const PRE2_STEPS: Step[] = [
   {
     title: '入室・挨拶・黙読20秒',
     points: ['流れは3級と同じ。「This is the Grade Pre-2 test.」と言われたら「OK.」', '黙読ではタイトルと、No.1 の答えになりやすい「by doing so」「so」の位置を先に探す'],
@@ -48,9 +51,62 @@ const PRE2_STEPS: { title: string; points: string[]; example?: string }[] = [
   },
 ];
 
+const G2_STEPS: Step[] = [
+  {
+    title: '入室・挨拶・黙読20秒',
+    points: ['流れは3級・準2級と同じ。「This is the Grade 2 test.」と言われたら「OK.」', '黙読ではタイトルと、No.1 の答えになりやすい「by doing so」「in this way」「so」「as a result」の位置を先に探す'],
+  },
+  {
+    title: 'パッセージの音読 (5点満点)',
+    points: ['タイトルから読む。約60語と長いので、意味のまとまり（カンマ・接続詞の前）で区切って落ち着いて', '知らない語も止まらずに読み切る。速さより、はっきり・一定のリズムで'],
+  },
+  {
+    title: 'No.1: パッセージについての質問 (5点満点)',
+    points: [
+      'How ~? → 「by doing so」「in this way」が指す内容を By ~ing で',
+      'Why ~? → 「so」「as a result」の前の部分を Because they ~ で',
+      '指示語（such / these / so）は具体的な語句に言い換え、主語は代名詞（they / it）にする',
+    ],
+    example: 'Q: How do more and more people help reduce food waste?\nA: By using smartphone apps that sell food at low prices.',
+  },
+  {
+    title: 'No.2: 3コマ漫画のナレーション (10点満点・準備20秒)',
+    points: [
+      '配点が一番高い設問。カードの1文（One day, ...）をそのまま読んで始める',
+      '各コマ2文が目安: 「人物の動作・出来事」＋「セリフ／吹き出しの内容」',
+      '2・3コマ目は矢印の言葉（The next day など）で文を始め、すべて過去形・過去進行形で語る',
+      'セリフは said to ~, "..." で引用。吹き出しは was thinking of ~ing / was looking forward to ~ing / was worried that ... で',
+      '準備の20秒では、各コマの「誰が・何をした」の動詞だけ先に決める',
+    ],
+    example:
+      'One day, Mr. and Mrs. Sato were talking in their kitchen. Mr. Sato said to his wife, "We throw away too much food." That weekend at a supermarket, Mrs. Sato was checking a shopping list. Mr. Sato was thinking of buying some meat. ...',
+  },
+  {
+    title: 'No.3: 意見を問う質問（カードを裏返して置く・5点満点）',
+    points: [
+      '「Some people say that ~. What do you think about that?」には、最初に I agree. / I disagree.',
+      '続けて理由を2文。1文目で主な理由、2文目で具体例・補足（Also, ... / For example, ...）',
+      '賛成・反対のどちらでも点数は同じ。理由を言いやすい方を選ぶ',
+    ],
+    example: 'I agree. Many customers cannot finish all the food they order. Smaller amounts are good for both their health and the environment.',
+  },
+  {
+    title: 'No.4: 社会・日常についての質問 (5点満点)',
+    points: ['「Do you think ~?」に Yes. / No. → 「Why? / Why not?」に理由を2文で', '自分の経験より「多くの人は〜」と一般論で答えると文を作りやすい（Many people ... / It is ... for people to ~）'],
+    example: 'Yes. → Why?\nPeople can buy things at any time without going to stores. Also, things are often cheaper on the Internet.',
+  },
+];
+
+/** 配点の説明 */
+const SCORING: Record<Grade, string> = {
+  '3': 'Reading 5点 ＋ Q&A No.1〜5 各5点=25点 ＋ Attitude 3点',
+  pre2: 'Reading 5点 ＋ Q&A No.1〜5 各5点=25点 ＋ Attitude 3点',
+  '2': 'Reading 5点 ＋ Q&A 25点（No.1 5点・No.2 10点・No.3 5点・No.4 5点）＋ Attitude 3点',
+};
+
 export const StrategyGuideModal: React.FC<StrategyGuideModalProps> = ({ isOpen, grade = '3', onClose }) => {
   if (!isOpen) return null;
-  const pre2 = grade === 'pre2';
+  const steps = grade === 'pre2' ? PRE2_STEPS : grade === '2' ? G2_STEPS : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
@@ -63,7 +119,7 @@ export const StrategyGuideModal: React.FC<StrategyGuideModalProps> = ({ isOpen, 
             </div>
             <div>
               <h2 className="text-lg font-black text-slate-900">
-                英検{pre2 ? '準2級' : '3級'} 2次面接試験 完全攻略ガイド
+                英検{GRADES[grade].label} 2次面接試験 完全攻略ガイド
               </h2>
               <p className="text-xs text-slate-500 font-medium">
                 配点・減点されない受け答え・即効スコアアップの法則
@@ -87,16 +143,16 @@ export const StrategyGuideModal: React.FC<StrategyGuideModalProps> = ({ isOpen, 
               試験の配点と合格基準
             </h3>
             <p className="text-xs sm:text-sm text-indigo-900 leading-relaxed">
-              満点は <strong>33点</strong>（Reading 5点 ＋ Q&A No.1〜5各5点=25点 ＋ Attitude 3点）。
+              満点は <strong>33点</strong>（{SCORING[grade]}）。
               合格ラインはおよそ <strong>19〜22点以上（約60%）</strong> です。全問正解できなくても、声を出して伝えようとする姿勢があれば合格できます！
             </p>
           </div>
 
           {/* Section: Steps breakdown */}
           <div className="space-y-4">
-            {pre2 ? (
+            {steps ? (
               <>
-            {PRE2_STEPS.map((st, i) => (
+            {steps.map((st, i) => (
               <div key={st.title} className="border border-slate-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
                   <span className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs">{i + 1}</span>
@@ -156,11 +212,14 @@ export const StrategyGuideModal: React.FC<StrategyGuideModalProps> = ({ isOpen, 
             <div className="border border-slate-200 rounded-xl p-4">
               <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
                 <span className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs">4</span>
-                <span>No. 2: イラストA (動作) & No. 3: イラストB (数・位置)</span>
+                <span>No. 2 & No. 3: イラストについての質問 (動作・数・位置)</span>
               </div>
               <ul className="text-xs text-slate-600 space-y-1.5">
                 <li>
                   ・<strong>No. 2:</strong> 「What is he/she doing?」には <strong>He is 〜ing. / She is 〜ing.</strong> で即答！
+                </li>
+                <li>
+                  ・「What is he/she going to do?」には <strong>He/She is going to 〜.</strong>（吹き出しの中身がこれからすること）
                 </li>
                 <li>
                   ・<strong>No. 3:</strong> 「How many 〜 are there?」には <strong>There are two/three 〜.</strong>、「Where is 〜?」には <strong>It is on/under/next to the 〜.</strong>

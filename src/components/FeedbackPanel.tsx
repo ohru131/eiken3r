@@ -3,12 +3,13 @@ import { motion } from 'motion/react';
 import { Flame, Volume2, RotateCcw, ChevronRight, Pause, Play, Loader2, Lightbulb, AlertTriangle, BookOpen } from 'lucide-react';
 import { AnswerRecord, ExamCard, StepFeedback } from '../types';
 import { EvalResult } from '../lib/api';
-import { hasFollowUp, itemLabel, sceneFor } from '../lib/grade';
+import { getQuestion, hasFollowUp, itemLabel, maxScore, sceneFor, scoreOutOf5, storyFor } from '../lib/grade';
 import { playSfx } from '../lib/sfx';
 import { celebrateSmall } from '../lib/celebrate';
 import { FeedbackAction } from '../engine/interview';
 import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
 import { SceneIllustration } from './SceneIllustration';
+import { StoryStrip } from './StoryStrip';
 
 interface Props {
   card: ExamCard;
@@ -22,10 +23,12 @@ interface Props {
   prevStreak?: number;
 }
 
-export const ScoreDots: React.FC<{ score: number; max?: number; animate?: boolean }> = ({ score, max = 5, animate }) => (
-  <span className="inline-flex gap-0.5">
+export const ScoreDots: React.FC<{ score: number; max?: number; animate?: boolean }> = ({ score, max = 5, animate }) => {
+  const s5 = scoreOutOf5(score, max);
+  return (
+  <span className="inline-flex gap-0.5" role="img" aria-label={`${max}点満点中 ${score}点`}>
     {Array.from({ length: max }).map((_, i) => {
-      const cls = `h-2.5 w-2.5 rounded-full ${i < score ? (score >= 4 ? 'bg-emerald-500' : score >= 3 ? 'bg-amber-400' : 'bg-rose-400') : 'bg-slate-200'}`;
+      const cls = `${max > 5 ? 'h-2 w-2' : 'h-2.5 w-2.5'} rounded-full ${i < score ? (s5 >= 4 ? 'bg-emerald-500' : s5 >= 3 ? 'bg-amber-400' : 'bg-rose-400') : 'bg-slate-200'}`;
       return animate && i < score ? (
         <motion.span key={i} className={cls} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.07, type: 'spring', stiffness: 400, damping: 15 }} />
       ) : (
@@ -33,11 +36,13 @@ export const ScoreDots: React.FC<{ score: number; max?: number; animate?: boolea
       );
     })}
   </span>
-);
+  );
+};
 
 const AUTO_SEC = 12;
 
 export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdvance, readModelAnswer, onSpeak, onAction, prevStreak = 0 }) => {
+  const max = maxScore(card, rec.item);
   const [fb, setFb] = useState<EvalResult | null>(null);
   const [left, setLeft] = useState(AUTO_SEC);
   const [paused, setPaused] = useState(!autoAdvance);
@@ -56,8 +61,9 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
     evalPromise.then(async (r) => {
       if (!alive) return;
       setFb(r);
-      playSfx(r.score >= 5 ? 'correct' : r.score >= 3 ? 'good' : 'retry');
-      if (r.score >= 5) setTimeout(() => alive && celebrateSmall(0.75, 0.25), 450);
+      const s5 = scoreOutOf5(r.score, max);
+      playSfx(s5 >= 5 ? 'correct' : s5 >= 3 ? 'good' : 'retry');
+      if (s5 >= 5) setTimeout(() => alive && celebrateSmall(0.75, 0.25), 450);
       // 音読はお手本（タイトル＋本文）を必ず読み上げ。その他は満点解答
       const modelText = rec.item === 'reading' ? `${card.title}. ${card.passage}` : r.improvedAnswer;
       if (readModelAnswer && modelText) {
@@ -81,8 +87,9 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fb, paused, left, speakingModel]);
 
-  const q = rec.item === 'reading' ? null : card[rec.item];
+  const q = getQuestion(card, rec.item);
   const pic = sceneFor(card, rec.item);
+  const story = storyFor(card, rec.item);
   const models = q ? q.modelAnswers : [`${card.title}. ${card.passage}`];
 
   return (
@@ -91,7 +98,7 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
         <div className="text-sm font-black text-slate-800">{itemLabel(card, rec.item)} の解説</div>
         {fb && (
           <div className="flex items-center gap-2">
-            {fb.score >= 4 && prevStreak + 1 >= 2 && (
+            {scoreOutOf5(fb.score, max) >= 4 && prevStreak + 1 >= 2 && (
               <motion.span
                 initial={{ opacity: 0, x: 8 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -101,14 +108,14 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
                 <Flame className="h-3 w-3" /> {prevStreak + 1}問連続 高得点
               </motion.span>
             )}
-            <ScoreDots score={fb.score} animate />
+            <ScoreDots score={fb.score} max={max} animate />
             <motion.span
               initial={{ scale: 1.6, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.35 }}
-              className={`text-lg font-black tabular-nums ${fb.score === 5 ? 'bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent' : 'text-slate-900'}`}
+              className={`text-lg font-black tabular-nums ${fb.score === max ? 'bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent' : 'text-slate-900'}`}
             >
-              {fb.score}/5
+              {fb.score}/{max}
             </motion.span>
           </div>
         )}
@@ -134,13 +141,14 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
             <SceneIllustration scene={pic.scene} cardId={pic.cardId} label={pic.label} />
           </div>
         )}
+        {story && <StoryStrip card={card} story={story} />}
 
         {!fb ? (
           <div className="flex items-center gap-2 py-6 text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" /> 採点中…
           </div>
         ) : (
-          <FeedbackBody fb={fb} onSpeak={onSpeak} />
+          <FeedbackBody fb={fb} max={max} onSpeak={onSpeak} />
         )}
 
         {q && (
@@ -202,11 +210,13 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
   );
 };
 
-export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; onSpeak: (t: string) => Promise<void> }> = ({ fb, onSpeak }) => (
+export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; max?: number; onSpeak: (t: string) => Promise<void> }> = ({ fb, max = 5, onSpeak }) => {
+  const s5 = scoreOutOf5(fb.score, max);
+  return (
   <div className="space-y-2.5">
     <div className="flex items-center gap-2">
       <span
-        className={`rounded-full px-2.5 py-0.5 text-xs font-black ${fb.score >= 5 ? 'bg-emerald-100 text-emerald-800' : fb.score >= 3 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+        className={`rounded-full px-2.5 py-0.5 text-xs font-black ${s5 >= 5 ? 'bg-emerald-100 text-emerald-800' : s5 >= 3 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
           }`}
       >
         {fb.verdict}
@@ -236,7 +246,8 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; onS
       {fb.tip}
     </p>
   </div>
-);
+  );
+};
 
 const ModelList: React.FC<{ title: string; items: string[]; onSpeak: (t: string) => Promise<void> }> = ({ title, items, onSpeak }) =>
   items?.length ? (

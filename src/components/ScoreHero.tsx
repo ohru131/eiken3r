@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { TrendingUp, Trophy, Flame, Target, Star } from 'lucide-react';
-import { ExamCard, FinalReport, ScoredItem } from '../types';
-import { ITEM_LABELS, PASS_LINE } from '../lib/scoring';
+import { ExamCard, FinalReport } from '../types';
+import { PASS_LINE } from '../lib/scoring';
+import { itemLabel, maxScore, scoredItems } from '../lib/grade';
 import { CardProgress } from '../lib/stats';
 import { celebratePass, celebrateSmall } from '../lib/celebrate';
 import { playSfx } from '../lib/sfx';
-
-const ORDER: ScoredItem[] = ['reading', 'q1', 'q2', 'q3', 'q4', 'q5'];
 
 function useCountUp(target: number, ms = 1100, delay = 250) {
   const [v, setV] = useState(0);
@@ -31,7 +30,7 @@ export interface Achievement {
   tone: 'gold' | 'green' | 'blue';
 }
 
-export function buildAchievements(report: FinalReport, progress: CardProgress | null, streak: number, passedCards: number, totalCards: number): Achievement[] {
+export function buildAchievements(card: ExamCard, report: FinalReport, progress: CardProgress | null, streak: number, passedCards: number, totalCards: number): Achievement[] {
   const a: Achievement[] = [];
   if (progress) {
     if (progress.prevBest !== null && report.total > progress.prevBest)
@@ -43,7 +42,7 @@ export function buildAchievements(report: FinalReport, progress: CardProgress | 
         tone: 'green',
       });
   }
-  const perfect = ORDER.filter((k) => report.scores[k] === 5).length;
+  const perfect = scoredItems(card).filter((k) => report.scores[k] === maxScore(card, k)).length;
   if (perfect >= 3) a.push({ icon: <Star className="h-3.5 w-3.5" />, text: `満点の設問 ×${perfect}`, tone: 'gold' });
   if (report.passed) a.push({ icon: <Target className="h-3.5 w-3.5" />, text: `合格圏のカード ${passedCards}/${totalCards}`, tone: 'blue' });
   if (streak >= 2) a.push({ icon: <Flame className="h-3.5 w-3.5" />, text: `${streak}日連続で練習中`, tone: 'gold' });
@@ -144,7 +143,7 @@ export const ScoreHero: React.FC<{ card: ExamCard; report: FinalReport; achievem
           )}
 
           <div className="mt-4 grid grid-cols-4 gap-2 text-center sm:grid-cols-7">
-            {[...ORDER.map((k) => ({ k, label: ITEM_LABELS[k].split(' ')[0], v: report.scores[k], max: 5 })), { k: 'att', label: '態度', v: report.attitude, max: 3 }].map(
+            {[...scoredItems(card).map((k) => ({ k: k as string, label: itemLabel(card, k).split(' ')[0], v: report.scores[k], max: maxScore(card, k) })), { k: 'att', label: '態度', v: report.attitude, max: 3 }].map(
               (x, i) => (
                 <motion.div
                   key={x.k}

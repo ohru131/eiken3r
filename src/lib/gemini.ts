@@ -1,6 +1,6 @@
 // Gemini API 呼び出し（ブラウザから REST で直接）。プロンプトは Claude と共通（prompts.ts）
 import { z } from 'zod';
-import { EvaluateInput, FeedbackSchema, ReportInput, ReportSchema, buildEvalPrompt, buildReportPrompt, clampScore } from './prompts';
+import { EvaluateInput, FeedbackSchema, ReportInput, ReportSchema, buildEvalPrompt, buildReportPrompt, clampScore, evalMaxScore } from './prompts';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -50,7 +50,7 @@ async function request(apiKey: string, path: string, init?: RequestInit, timeout
 const FEEDBACK_RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
-    score: { type: 'INTEGER', description: '0-5 integer' },
+    score: { type: 'INTEGER', description: '整数。0〜満点（通常5点。プロンプトに「満点」の指定があればその値）' },
     verdict: { type: 'STRING', description: '短い日本語の評価ラベル (例: 完璧！ / あと一歩 / 要練習)' },
     goodPoints: { type: 'STRING', description: '良かった点。受験者の実際の発話を引用して日本語で1-2文' },
     corrections: { type: 'STRING', description: '誤り・不足の具体的な指摘と直し方。日本語1-3文。問題がなければ「特になし」' },
@@ -116,7 +116,7 @@ async function generateStructured<T extends z.ZodType>(
 export async function evaluateWithGemini(apiKey: string, model: string, b: EvaluateInput) {
   const p = buildEvalPrompt(b);
   const r = await generateStructured(apiKey, model, p.system, p.user, FEEDBACK_RESPONSE_SCHEMA, FeedbackSchema, 16384, 60_000);
-  return { ...r, score: clampScore(r.score), source: 'gemini' as const };
+  return { ...r, score: clampScore(r.score, evalMaxScore(b)), source: 'gemini' as const };
 }
 
 export async function reportWithGemini(apiKey: string, model: string, b: ReportInput) {
