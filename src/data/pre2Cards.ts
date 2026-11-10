@@ -73,7 +73,7 @@ const BASE: ExamCard[] = [
       text: 'Now, please look at the people in Picture A. They are doing different things. Tell me as much as you can about what they are doing.',
       ja: 'では、イラストAの人々を見てください。彼らはいろいろなことをしています。彼らが何をしているか、できるだけたくさん話してください。',
       modelAnswers: [
-        'A boy is kicking a ball. A woman is taking a picture. A man is carrying a box. A girl is feeding a bird. A man is painting a bench.',
+        'A boy is kicking a ball. A woman is taking a picture. A man is carrying a box. A girl is feeding a bird. An old man is painting a bench.',
       ],
       explanation:
         '5人の動作を1人1文ずつ、A boy is ~ing. の現在進行形で言います。左から順に説明すると抜けが出にくくなります。分からない動作があっても、知っている語で言い換えて5人全員について話しましょう。',

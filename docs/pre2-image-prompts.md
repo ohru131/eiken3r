@@ -99,7 +99,7 @@ From left to right:
 
 ```
 Scene: a living room at home.
-A boy in the center sits at a desk looking at a laptop; the screen is frozen and shows a loading circle (no text).
+A boy in the center sits at a desk looking at a computer; the screen is frozen and shows a loading circle (no text).
 Thought bubble: the boy's father, smiling and ready to help.
 ```
 
@@ -224,7 +224,7 @@ From left to right:
 2. A girl is choosing apples.
 3. A woman is putting vegetables in a bag.
 4. A man is carrying a box of carrots.
-5. An old woman is paying money.
+5. An old woman is paying for some vegetables.
 ```
 
 **イラストB** → `public/images/pre2/pre2-08-b.png`

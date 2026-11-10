@@ -760,7 +760,7 @@ export const PRE2_CARDS_2: ExamCard[] = [
       ja: "では、イラストBの女性を見てください。状況を説明してください。",
       modelAnswers: [
         "Her closet is full of clothes, so she is thinking of taking some to a shop.",
-        "She has too many clothes because she buys a lot. She wants to give some of them away."
+        "Her closet is full of clothes. She wants to take some of them to a shop and give them away."
       ],
       explanation: "「クローゼットが服でいっぱい（状況）」と「店に持って行こうと考えている（吹き出し）」の2点を so や because でつなぎます。",
       point: "状況 + 吹き出し（so / because でつなぐ）",
@@ -1185,7 +1185,7 @@ export const PRE2_CARDS_2: ExamCard[] = [
         "Many people want to live with pets. Also, apartment owners can get more customers if they allow pets."
       ],
       modelAnswersNo: [
-        "Pets can make noise and a bad smell. Also, some people in apartments are afraid of animals."
+        "Pets can make a lot of noise and cause bad smells. Also, some people in apartments are afraid of animals."
       ],
       explanation: "まず Yes / No をはっきり言い、Why? / Why not? には理由を2文で答えます。1文目で主な理由、2文目で具体例や補足（Also, ... / For example, ...）を足すと説得力が上がります。",
       point: "Yes/No → 理由2文（主張＋具体例）",
@@ -1311,7 +1311,7 @@ export const PRE2_CARDS_2: ExamCard[] = [
           size: 1.7
         }
       ],
-      description: "Picture A (an outdoor farmers' market): five people are doing different things. A boy is pushing a shopping cart. A girl is choosing apples. A woman is putting vegetables in a bag. A man is carrying a box of carrots. An old woman is paying money."
+      description: "Picture A (an outdoor farmers' market): five people are doing different things. A boy is pushing a shopping cart. A girl is choosing apples. A woman is putting vegetables in a bag. A man is carrying a box of carrots. An old woman is paying for some vegetables."
     },
     sceneB: {
       background: "kitchen",
@@ -1351,7 +1351,7 @@ export const PRE2_CARDS_2: ExamCard[] = [
       text: "Now, please look at the people in Picture A. They are doing different things. Tell me as much as you can about what they are doing.",
       ja: "では、イラストAの人々を見てください。彼らはいろいろなことをしています。彼らが何をしているか、できるだけたくさん話してください。",
       modelAnswers: [
-        "A boy is pushing a shopping cart. A girl is choosing apples. A woman is putting vegetables in a bag. A man is carrying a box of carrots. An old woman is paying money."
+        "A boy is pushing a shopping cart. A girl is choosing apples. A woman is putting vegetables in a bag. A man is carrying a box of carrots. An old woman is paying for some vegetables."
       ],
       explanation: "5人の動作を1人1文ずつ、A boy is ~ing. の現在進行形で言います。左から順に説明すると抜けが出にくくなります。分からない動作があっても、知っている語で言い換えて5人全員について話しましょう。",
       point: "5人の動作を現在進行形で1文ずつ",
@@ -1788,10 +1788,10 @@ export const PRE2_CARDS_2: ExamCard[] = [
         "Yes. / No."
       ],
       modelAnswersYes: [
-        "Bicycles do not make air pollution and they are cheap. Also, cities are building more bicycle lanes."
+        "Bicycles do not cause air pollution and they are cheap. Also, cities are building more bicycle lanes."
       ],
       modelAnswersNo: [
-        "Many people use cars or trains because it is more comfortable. Also, riding a bicycle on rainy days is difficult."
+        "Many people use cars or trains because they are more comfortable. Also, riding a bicycle on rainy days is difficult."
       ],
       explanation: "まず Yes / No をはっきり言い、Why? / Why not? には理由を2文で答えます。1文目で主な理由、2文目で具体例や補足（Also, ... / For example, ...）を足すと説得力が上がります。",
       point: "Yes/No → 理由2文（主張＋具体例）",
