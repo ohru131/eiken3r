@@ -253,7 +253,7 @@ export const GRADE2_CARDS_3: ExamCard[] = [
       followUpNo: 'Why not?',
       modelAnswers: ['Yes. / No.'],
       modelAnswersYes: [
-        'More people are interested in their health these days. Also, many gyms are open twenty-four hours, so they are easy to use.',
+        'More people are interested in their health these days. Also, many gyms are open twenty-four hours a day, so they are easy to use.',
       ],
       modelAnswersNo: [
         'Going to a gym every month costs a lot of money. People can exercise for free by walking or running in parks.',
@@ -444,10 +444,11 @@ export const GRADE2_CARDS_3: ExamCard[] = [
               { emoji: '👦', x: 30, y: 62, size: 4.6 },
               { emoji: '🛒', x: 16, y: 72, size: 2.6 },
               { emoji: '💧', x: 44, y: 60, size: 2 },
+              { emoji: '🍪', x: 16, y: 60, size: 1.8 },
               { emoji: '👩', x: 68, y: 62, size: 4.6, flip: true, thought: '🔦' },
             ],
             description:
-              'Panel 2 (that weekend at a store): Takuya is putting bottles of water into a shopping cart. Mrs. Ikeda is thinking of buying a flashlight.',
+              'Panel 2 (that weekend at a store): Takuya is putting bottles of water into a shopping cart that already has a box of cookies in it. Mrs. Ikeda is thinking of buying a flashlight.',
           },
         },
         {
@@ -540,7 +541,7 @@ export const GRADE2_CARDS_3: ExamCard[] = [
     category: '教育',
     level: 'standard',
     passage:
-      'Many Japanese students want to study abroad to improve their English. However, studying in a foreign country is very expensive, and some students cannot afford it. Recently, some schools have started online study abroad programs. Students take classes with foreign teachers and talk with students in other countries through the Internet, so they can learn English and other cultures without leaving Japan.',
+      'Many Japanese students want to study abroad to improve their English. However, studying in a foreign country is very expensive, and some students cannot afford it. Recently, some schools have started online study abroad programs. Students take classes with foreign teachers and talk with students in other countries through the Internet, so they can learn English and learn about other cultures without leaving Japan.',
     passageJa:
       '多くの日本の学生は、英語を上達させるために留学したいと思っています。しかし、外国で勉強するのはとても費用がかかり、その費用を払えない学生もいます。最近、オンライン留学プログラムを始めた学校もあります。学生はインターネットを通じて外国人の先生の授業を受けたり、他の国の学生と話したりするので、日本を離れずに英語や他の文化を学ぶことができます。',
     vocabulary: [
@@ -600,7 +601,7 @@ export const GRADE2_CARDS_3: ExamCard[] = [
       ],
     },
     q1: {
-      text: 'According to the passage, how can students learn English and other cultures without leaving Japan?',
+      text: 'According to the passage, how can students learn English and learn about other cultures without leaving Japan?',
       ja: 'パッセージによると、学生はどのようにして日本を離れずに英語や他の文化を学ぶことができますか？',
       modelAnswers: [
         'By taking classes with foreign teachers and talking with students in other countries through the Internet.',
@@ -787,7 +788,7 @@ export const GRADE2_CARDS_3: ExamCard[] = [
         'Translation apps sometimes make mistakes. Speaking directly in a foreign language helps people understand each other better.',
       ],
       modelAnswersNo: [
-        'Translation apps are getting better and better every year. People can use that time to study other important subjects.',
+        'Translation apps are getting better and better every year. People can use their time to study other important subjects instead.',
       ],
       explanation:
         'Yes / No のあと理由を2文で。Yes なら翻訳アプリの間違い・直接話す良さ、No ならアプリの進歩・他の勉強に時間を使えることなどが使えます。',

@@ -79,7 +79,7 @@ const BASE: ExamCard[] = [
       ja: 'パッセージによると、ますます多くの人々はどのようにして地域の食品ロスを減らす手助けをしていますか？',
       modelAnswers: [
         'By using smartphone apps that sell food at low prices.',
-        'They use apps that sell such food at low prices.',
+        'They use smartphone apps that sell food that can still be eaten at low prices.',
       ],
       explanation:
         '最後の文の by doing so（そうすることで）が答えの目印。doing so は直前の use these apps を指し、these apps は前の文の「そのような食品を安く売るスマートフォンアプリ」のこと。these を具体的に言い換えて By using ~ で答えます。',

@@ -472,7 +472,7 @@ export const GRADE2_CARDS_4: ExamCard[] = [
               { emoji: '👧', x: 30, y: 62, size: 4.6 },
               { emoji: '🌧️', x: 16, y: 22, size: 2.6 },
               { emoji: '🎾', x: 44, y: 70, size: 1.8 },
-              { emoji: '👨', x: 68, y: 62, size: 4.6, flip: true, thought: '🏸' },
+              { emoji: '👨', x: 68, y: 62, size: 4.6, flip: true, thought: '🏟️' },
             ],
             description:
               'Panel 3 (that Saturday at home): It is raining outside, so Riko cannot play tennis. Riko is looking out the window sadly. Her father is thinking of taking her to an indoor gym to practice.',
@@ -626,7 +626,7 @@ export const GRADE2_CARDS_4: ExamCard[] = [
         '最後の文の By doing so が目印です。doing so は直前の文 allow stores to close late at night を指します。allow を allowing にして By allowing stores to close late at night. と答えます。',
       point: 'By doing so → By allowing stores to ~',
       commonMistakes: [
-        '「By closing late at night.」→「遅くまで開ける」と誤解されやすい。close late at night の前に allowing stores to を付ける',
+        '「By closing late at night.」→閉めるのは店で、会社がするのは「認める」こと。By allowing stores to close late at night と言う',
         '「Because there is a shortage of workers.」→それは問題の原因。how には方法で答える',
         '「By allow stores ...」→ By allowing',
       ],
@@ -756,7 +756,7 @@ export const GRADE2_CARDS_4: ExamCard[] = [
       text: 'According to the passage, how can people all over the world enjoy art without leaving their homes?',
       ja: 'パッセージによると、世界中の人々はどのようにして家から出ずに芸術を楽しむことができますか？',
       modelAnswers: [
-        'By looking at famous paintings and statues on museums\' virtual tours on their computers or smartphones.',
+        'By using virtual tours on museum websites to look at famous paintings and statues closely.',
         'They can use virtual tours on museum websites to see famous paintings and statues closely.',
       ],
       explanation:

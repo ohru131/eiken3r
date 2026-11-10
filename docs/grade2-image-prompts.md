@@ -325,7 +325,7 @@ Scene: in the living room. Mrs. Ikeda and Takuya are watching news about an eart
 **コマ2** → `public/images/g2/g2-13-2.png`（コマ上の言葉: That weekend at a store）
 
 ```
-Scene: that weekend at a store. Takuya is putting bottles of water into a shopping cart. Mrs. Ikeda is thinking of buying a flashlight.
+Scene: that weekend at a store. Takuya is putting bottles of water into a shopping cart that already has a box of cookies in it. Mrs. Ikeda is thinking of buying a flashlight.
 ```
 
 **コマ3** → `public/images/g2/g2-13-3.png`（コマ上の言葉: That night）

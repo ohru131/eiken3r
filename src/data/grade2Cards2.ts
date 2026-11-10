@@ -14,7 +14,7 @@ export const GRADE2_CARDS_2: ExamCard[] = [
     passage:
       'These days, more and more people buy things online, so delivery companies are busy. However, there are not enough drivers, and they often have to visit the same house again because customers are out. Now, some companies are setting up delivery lockers at stations and supermarkets. Customers can pick up their packages there at any time, and in this way drivers can work more efficiently.',
     passageJa:
-      '最近、ますます多くの人がオンラインで物を買うので、配送会社は忙しくなっています。しかし、配達員が足りず、客が家にいないために同じ家を何度も訪ねなければならないことがよくあります。現在、駅やスーパーマーケットに宅配ロッカーを設置している会社もあります。客はいつでもそこで荷物を受け取ることができ、このようにして配達員はより効率的に働くことができます。',
+      '最近、ますます多くの人がオンラインで物を買うので、配送会社は忙しくなっています。しかし、配達員が足りず、客が家にいないために同じ家をもう一度訪ねなければならないことがよくあります。現在、駅やスーパーマーケットに宅配ロッカーを設置している会社もあります。客はいつでもそこで荷物を受け取ることができ、このようにして配達員はより効率的に働くことができます。',
     vocabulary: [
       { word: 'delivery', meaning: '配達' },
       { word: 'not enough', meaning: '足りない' },
@@ -372,10 +372,10 @@ export const GRADE2_CARDS_2: ExamCard[] = [
       ja: '政府は電気自動車を買う人にもっとお金を出すべきだと言う人がいます。あなたはそれについてどう思いますか？',
       modelAnswers: [
         'I agree. Electric cars are still more expensive than other cars. If the government helps, more people will buy them and protect the environment.',
-        'I disagree. The government should spend money on more important things, such as education. It should build more charging stations first.',
+        'I disagree. Many people do not buy electric cars because there are few places to charge them. The government should build more charging stations first.',
       ],
       explanation:
-        '賛成なら「値段が高い→補助があれば広まる」、反対なら「ほかにお金を使うべきことがある」「先に充電スタンドを増やすべき」が言いやすい理由です。If ~, ... の文は理由を詳しくするのに便利です。',
+        '賛成なら「値段が高い→補助があれば広まる」、反対なら「充電できる場所が少ないのが原因→先に充電スタンドを増やすべき」が言いやすい理由です。If ~, ... の文は理由を詳しくするのに便利です。',
       point: '立場 → 理由（値段／お金の使い道）',
       commonMistakes: [
         '「Electric car is expensive.」→ Electric cars are expensive.（一般的な話は複数形）',
@@ -607,7 +607,7 @@ export const GRADE2_CARDS_2: ExamCard[] = [
       ja: 'パッセージによると、なぜ道路の交通量が減っているのですか？',
       modelAnswers: [
         'Because many people use bicycles from bike-sharing services to go to work or school.',
-        'Many people go to work or school by bicycles that they rent with a smartphone app.',
+        'Many people go to work or school on bicycles that they rent with a smartphone app.',
       ],
       explanation:
         '最後の文の As a result（その結果）の直前の文が理由です。その文の these bicycles は「スマートフォンのアプリで借りられるシェアサイクル」のこと。these のままにせず、どんな自転車かを具体的に言いましょう。',
@@ -727,7 +727,7 @@ export const GRADE2_CARDS_2: ExamCard[] = [
             items: [
               { emoji: '👩', x: 26, y: 62, size: 4.6 },
               { emoji: '👨', x: 46, y: 62, size: 4.6 },
-              { emoji: '💬', x: 36, y: 40, size: 2.2 },
+              { emoji: '🇪🇸', x: 36, y: 40, size: 2.2 },
               { emoji: '👨', x: 72, y: 62, size: 4.6, flip: true, thought: '📱' },
             ],
             description:
@@ -994,7 +994,7 @@ export const GRADE2_CARDS_2: ExamCard[] = [
             items: [
               { emoji: '👧', x: 30, y: 62, size: 4.6 },
               { emoji: '🧥', x: 44, y: 62, size: 2.2 },
-              { emoji: '👩', x: 68, y: 62, size: 4.6, flip: true, thought: '🛍️' },
+              { emoji: '👩', x: 68, y: 62, size: 4.6, flip: true, thought: '📥' },
               { emoji: '👚', x: 82, y: 66, size: 2 },
             ],
             description:
