@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reportModel: DEFAULT_REPORT_MODEL,
   settingsVersion: SETTINGS_VERSION,
   mode: 'exam',
+  grade: '3',
   examinerId: 'smith',
   speechRate: 1,
   sfx: true,

@@ -1,8 +1,10 @@
 // APIキーが無い時のローカル簡易採点と、最終スコア計算
 import { AnswerRecord, CardQuestion, ExamCard, ScoredItem, StepFeedback } from '../types';
+import { gradeOf, hasFollowUp } from './grade';
 
 export const PASS_LINE = 20; // 33点満点中の合格目安（約6割）
 
+/** 3級の設問ラベル（級に応じたラベルは grade.ts の itemLabel） */
 export const ITEM_LABELS: Record<ScoredItem, string> = {
   reading: '音読',
   q1: 'No.1 パッセージ',
@@ -48,7 +50,7 @@ export function isYesAnswer(text: string): boolean | null {
   const w = words(text);
   if (!w.length) return null;
   const head = w.slice(0, 4).join(' ');
-  if (/^(no|nope|not really|i don't|i do not|i haven't|i have not|i'm not|i am not|i didn't|never)\b/.test(head)) return false;
+  if (/^(no|nope|not really|i don't|i do not|i haven't|i have not|i'm not|i am not|i didn't|never|i disagree)\b/.test(head)) return false;
   if (/^(yes|yeah|yep|sure|of course|i do|i have|i am|i'm|i did|i like|i love)\b/.test(head)) return true;
   if (w.includes('no') || w.includes("don't")) return false;
   return true;
@@ -112,13 +114,21 @@ export function localEvaluate(card: ExamCard, rec: AnswerRecord): StepFeedback {
   }
 
   const q = getQuestion(card, rec.item)!;
-  const models = rec.item === 'q5' ? [...q.modelAnswers, ...(card.q5.modelAnswersYes || []), ...(card.q5.modelAnswersNo || [])] : q.modelAnswers;
+  const follow = hasFollowUp(q);
+  const models = follow ? [...q.modelAnswers, ...q.modelAnswersYes, ...q.modelAnswersNo] : q.modelAnswers;
   const best = Math.max(...models.map((m) => overlap(answer, m)));
-  const hasSubjectVerb = /^(he|she|they|it|there|i|we|because|you|the|a|my|yes|no)\b/.test(w[0]) && w.length >= 3;
+  const hasSubjectVerb = /^(he|she|they|it|there|i|we|because|by|you|the|a|an|my|his|her|yes|no)\b/.test(w[0]) && w.length >= 3;
+  const pre2 = gradeOf(card) === 'pre2';
   let score: number;
-  if (rec.item === 'q4' || rec.item === 'q5') {
-    score = w.length >= 8 && hasSubjectVerb ? 5 : w.length >= 4 ? 4 : w.length >= 2 ? 3 : 2;
-    if (rec.item === 'q5' && !rec.followUpAnswer) score = Math.min(score, 3);
+  if (pre2 && rec.item === 'q2') {
+    // 準2級 No.2: 5人の動作を進行形で言えた数（~ing の数）でおおまかに採点
+    const actions = new Set(w.filter((x) => x.length > 4 && x.endsWith('ing'))).size;
+    score = Math.max(1, Math.min(5, actions));
+  } else if (rec.item === 'q4' || rec.item === 'q5') {
+    // 準2級は理由を2文（約12語以上）求められる
+    const full = pre2 ? 12 : 8;
+    score = w.length >= full && hasSubjectVerb ? 5 : w.length >= full / 2 ? 4 : w.length >= 2 ? 3 : 2;
+    if (follow && !rec.followUpAnswer) score = Math.min(score, 3);
   } else {
     score = best > 0.7 && hasSubjectVerb ? 5 : best > 0.5 ? 4 : best > 0.3 ? 3 : best > 0.1 ? 2 : 1;
     if (!hasSubjectVerb && score > 3) score = 3;
@@ -128,7 +138,12 @@ export function localEvaluate(card: ExamCard, rec: AnswerRecord): StepFeedback {
     score,
     verdict: score === 5 ? 'よくできました' : score >= 4 ? 'おしい！' : score >= 3 ? 'あと一歩' : '要復習',
     goodPoints: `「${answer}」と答えました。`,
-    corrections: hasSubjectVerb ? '模範解答と見比べて、足りない語句がないか確認しましょう。' : '単語だけでなく、主語＋動詞の「文」で答えましょう。',
+    corrections:
+      pre2 && rec.item === 'q2' && score < 5
+        ? '5人全員の動作を「A boy is ~ing.」の形で1文ずつ言いましょう。'
+        : hasSubjectVerb
+          ? '模範解答と見比べて、足りない語句がないか確認しましょう。'
+          : '単語だけでなく、主語＋動詞の「文」で答えましょう。',
     improvedAnswer: q.modelAnswers[0],
     tip: q.point,
   };

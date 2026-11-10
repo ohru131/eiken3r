@@ -348,8 +348,15 @@ const Thought: React.FC<{ emoji: string }> = ({ emoji }) => (
   </div>
 );
 
-export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; className?: string }> = ({ scene, cardId, className = '' }) => {
+/** 左上の「A」「B」ラベル（準2級のイラストA/B） */
+const PictureLabel: React.FC<{ label?: string }> = ({ label }) =>
+  label ? (
+    <div className="absolute left-1.5 top-1.5 z-[200] rounded-md border-2 border-slate-800 bg-white px-1.5 text-sm font-black leading-tight text-slate-900">{label}</div>
+  ) : null;
+
+export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; className?: string; label?: string }> = ({ scene, cardId, className = '', label }) => {
   const [imgError, setImgError] = React.useState(false);
+  React.useEffect(() => setImgError(false), [scene.image, cardId]);
 
   // 画像が指定されているか、または cardId から自動特定
   const rawSrc = scene.image || (cardId ? `/images/cards/${cardId}.png` : undefined);
@@ -369,6 +376,7 @@ export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; classN
           onError={() => setImgError(true)}
           className="h-full w-full object-cover"
         />
+        <PictureLabel label={label} />
       </div>
     );
   }
@@ -395,6 +403,13 @@ export const SceneIllustration: React.FC<{ scene: Scene; cardId?: string; classN
         <rect x="0" y={floorTop} width="400" height="3" fill="#000" opacity="0.08" />
         {bg.overlay}
       </svg>
+      <PictureLabel label={label} />
+      {scene.image && (
+        // 画像ファイル未配置 → 絵文字の仮イラスト（docs/pre2-image-prompts.md で作成）
+        <div className="absolute right-1.5 top-1.5 z-[200] rounded bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-black text-amber-950" title={`${scene.image} が見つからないため仮イラストを表示中`}>
+          仮イラスト
+        </div>
+      )}
       {scene.items.map((it, i) => {
         const person = personInfo(it.emoji);
         const furniture = it.emoji.startsWith('[');

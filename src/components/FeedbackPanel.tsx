@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Flame, Volume2, RotateCcw, ChevronRight, Pause, Play, Loader2, Lightbulb, AlertTriangle, BookOpen } from 'lucide-react';
 import { AnswerRecord, ExamCard, StepFeedback } from '../types';
 import { EvalResult } from '../lib/api';
-import { ITEM_LABELS } from '../lib/scoring';
+import { hasFollowUp, itemLabel, sceneFor } from '../lib/grade';
 import { playSfx } from '../lib/sfx';
 import { celebrateSmall } from '../lib/celebrate';
 import { FeedbackAction } from '../engine/interview';
@@ -82,17 +82,13 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
   }, [fb, paused, left, speakingModel]);
 
   const q = rec.item === 'reading' ? null : card[rec.item];
-  const models =
-    rec.item === 'q5'
-      ? [...card.q5.modelAnswers]
-      : q
-        ? q.modelAnswers
-        : [`${card.title}. ${card.passage}`];
+  const pic = sceneFor(card, rec.item);
+  const models = q ? q.modelAnswers : [`${card.title}. ${card.passage}`];
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
       <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2.5">
-        <div className="text-sm font-black text-slate-800">{ITEM_LABELS[rec.item]} の解説</div>
+        <div className="text-sm font-black text-slate-800">{itemLabel(card, rec.item)} の解説</div>
         {fb && (
           <div className="flex items-center gap-2">
             {fb.score >= 4 && prevStreak + 1 >= 2 && (
@@ -133,9 +129,9 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
         {rec.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}
         {!rec.pronunciation && rec.pronunciationNote && <PronunciationNote note={rec.pronunciationNote} />}
         {rec.item === 'reading' && <ModelReading card={card} onSpeak={onSpeak} />}
-        {(rec.item === 'q2' || rec.item === 'q3') && (
+        {pic && (
           <div className="max-w-sm">
-            <SceneIllustration scene={card.scene} cardId={card.id} />
+            <SceneIllustration scene={pic.scene} cardId={pic.cardId} label={pic.label} />
           </div>
         )}
 
@@ -156,10 +152,10 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
             <p className="text-[14px] leading-relaxed text-slate-800">{q.explanation}</p>
             <div className="text-[12px] text-slate-500">{q.ja}</div>
             <ModelList title="模範解答" items={models} onSpeak={onSpeak} />
-            {rec.item === 'q5' && (
+            {hasFollowUp(q) && (
               <>
-                <ModelList title={`Yes の後「${card.q5.followUpYes}」への答え方`} items={card.q5.modelAnswersYes} onSpeak={onSpeak} />
-                <ModelList title={`No の後「${card.q5.followUpNo}」への答え方`} items={card.q5.modelAnswersNo} onSpeak={onSpeak} />
+                <ModelList title={`Yes の後「${q.followUpYes}」への答え方`} items={q.modelAnswersYes} onSpeak={onSpeak} />
+                <ModelList title={`No の後「${q.followUpNo}」への答え方`} items={q.modelAnswersNo} onSpeak={onSpeak} />
               </>
             )}
             {q.commonMistakes && q.commonMistakes.length > 0 && (

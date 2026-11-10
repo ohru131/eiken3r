@@ -2,22 +2,26 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { practiceStreak, practicedToday, recentAverage, weekCount } from '../lib/stats';
 import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame } from 'lucide-react';
-import { AppSettings, ExamCard, HistoryRecord, InterviewMode } from '../types';
+import { AppSettings, ExamCard, Grade, HistoryRecord, InterviewMode } from '../types';
+import { GRADES } from '../lib/grade';
 import { EXAMINERS } from '../data/examiners';
 import { PASS_LINE } from '../lib/scoring';
 
 interface Props {
   cards: ExamCard[];
   settings: AppSettings;
+  /** 選択中の級の記録 */
   history: HistoryRecord[];
+  /** 全級の記録（連続日数・今週の回数用） */
+  allHistory: HistoryRecord[];
   onSettings: (s: AppSettings) => void;
   onStart: (card: ExamCard) => void;
 }
 
-const ProgressPanel: React.FC<{ history: HistoryRecord[]; total: number; passed: number }> = ({ history, total, passed }) => {
-  const streak = practiceStreak(history);
-  const today = practicedToday(history);
-  const week = weekCount(history);
+const ProgressPanel: React.FC<{ history: HistoryRecord[]; allHistory: HistoryRecord[]; total: number; passed: number }> = ({ history, allHistory, total, passed }) => {
+  const streak = practiceStreak(allHistory);
+  const today = practicedToday(allHistory);
+  const week = weekCount(allHistory);
   const avg = recentAverage(history);
   return (
     <div className="w-full rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur lg:w-80">
@@ -84,7 +88,7 @@ const STATUS_CARD: Record<Status, string> = {
   passed: 'border-emerald-300 bg-emerald-50/40',
 };
 
-export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettings, onStart }) => {
+export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHistory, onSettings, onStart }) => {
   const [level, setLevel] = useState<'all' | ExamCard['level']>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | Status>('all');
   const best = useMemo(() => {
@@ -102,6 +106,12 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
   const statusCount = (st: Status) => byLevel.filter((c) => statusOf(c) === st).length;
   const list = byLevel.filter((c) => statusFilter === 'all' || statusOf(c) === statusFilter);
   const setMode = (mode: InterviewMode) => onSettings({ ...settings, mode });
+  const setGrade = (grade: Grade) => {
+    setLevel('all');
+    setStatusFilter('all');
+    onSettings({ ...settings, grade });
+  };
+  const pre2 = settings.grade === 'pre2';
   const done = Object.keys(best).length;
   const passedCount = Object.values(best).filter((v) => v >= PASS_LINE).length;
 
@@ -123,10 +133,27 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
       {/* hero */}
       <section className="flex flex-col gap-5 overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-sky-500 p-6 text-white shadow-xl sm:p-8 lg:flex-row lg:items-center">
         <div className="flex-1">
-        <div className="text-xs font-bold tracking-widest text-indigo-100">英検3級 二次試験（面接）</div>
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-bold tracking-widest text-indigo-100">英検{GRADES[settings.grade].label} 二次試験（面接）</div>
+        </div>
         <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">面接の練習をしよう</h2>
+        <div className="mt-3 inline-flex rounded-xl bg-white/15 p-1 text-sm font-black" role="tablist" aria-label="級を選ぶ">
+          {(['3', 'pre2'] as const).map((g) => (
+            <button
+              key={g}
+              role="tab"
+              aria-selected={settings.grade === g}
+              onClick={() => setGrade(g)}
+              className={`rounded-lg px-4 py-1.5 transition ${settings.grade === g ? 'bg-white text-indigo-700 shadow' : 'text-white/85 hover:bg-white/10'}`}
+            >
+              {GRADES[g].label}
+            </button>
+          ))}
+        </div>
         <p className="mt-2 max-w-2xl text-sm text-indigo-50">
-          入室から退室まで、本番と同じ順番で面接官が質問します。答え終わって少し待つと、次の質問に進みます。
+          {pre2
+            ? '音読のあと、パッセージ・イラストA（5人の動作）・イラストB（状況説明）・意見を問う2問の計5問。本番と同じ順番で面接官が質問します。'
+            : '入室から退室まで、本番と同じ順番で面接官が質問します。答え終わって少し待つと、次の質問に進みます。'}
         </p>
         <div className="mt-4 flex flex-wrap gap-2 text-[12px] font-bold">
           {[
@@ -144,7 +171,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, onSettin
           })}
         </div>
         </div>
-        <ProgressPanel history={history} total={cards.length} passed={passedCount} />
+        <ProgressPanel history={history} allHistory={allHistory} total={cards.length} passed={passedCount} />
       </section>
 
       {/* mode + examiner */}

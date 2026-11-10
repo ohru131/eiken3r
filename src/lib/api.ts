@@ -1,5 +1,6 @@
 import { AnswerRecord, AppSettings, ExamCard, FinalReport, ScoredItem, StepFeedback } from '../types';
-import { ITEM_LABELS, getQuestion, localEvaluate } from './scoring';
+import { getQuestion, localEvaluate } from './scoring';
+import { gradeOf, hasFollowUp, itemLabel, sceneFor } from './grade';
 import { summarizeAssessment } from './azurePronunciation';
 import type Anthropic from '@anthropic-ai/sdk';
 
@@ -51,13 +52,14 @@ export async function evaluateAnswer(
   if (!useClaude) return localEvaluate(card, rec);
   const q = getQuestion(card, rec.item);
   const body = {
+    grade: gradeOf(card),
     item: rec.item,
-    itemLabel: ITEM_LABELS[rec.item],
+    itemLabel: itemLabel(card, rec.item),
     cardTitle: card.title,
     passage: card.passage,
-    sceneDescription: rec.item === 'q2' || rec.item === 'q3' ? card.scene.description : '',
+    sceneDescription: sceneFor(card, rec.item)?.scene.description ?? '',
     question: rec.question,
-    modelAnswers: q ? q.modelAnswers : [card.passage],
+    modelAnswers: q ? (hasFollowUp(q) ? [...q.modelAnswers, ...q.modelAnswersYes, ...q.modelAnswersNo] : q.modelAnswers) : [card.passage],
     answer: rec.answer,
     followUpQuestion: rec.followUpQuestion,
     followUpAnswer: rec.followUpAnswer,
@@ -81,17 +83,18 @@ export async function generateReport(
   settings: AppSettings,
   useClaude: boolean
 ): Promise<Pick<FinalReport, 'summary' | 'strengths' | 'improvements' | 'nextSteps' | 'source'>> {
-  const local = () => localReport(records, scores);
+  const local = () => localReport(card, records, scores);
   if (!useClaude) return local();
   try {
     const body = {
+        grade: gradeOf(card),
         cardTitle: card.title,
         scores,
         attitude,
         total,
         passLine,
         records: records.map((x) => ({
-          item: ITEM_LABELS[x.item],
+          item: itemLabel(card, x.item),
           question: x.question,
           answer: x.answer || '(無回答)',
           followUp: x.followUpQuestion ? `${x.followUpQuestion} → ${x.followUpAnswer || '(無回答)'}` : undefined,
@@ -105,10 +108,10 @@ export async function generateReport(
   }
 }
 
-function localReport(records: AnswerRecord[], scores: Record<ScoredItem, number>) {
+function localReport(card: ExamCard, records: AnswerRecord[], scores: Record<ScoredItem, number>) {
   const entries = Object.entries(scores) as [ScoredItem, number][];
-  const good = entries.filter(([, v]) => v >= 4).map(([k]) => ITEM_LABELS[k]);
-  const weak = entries.filter(([, v]) => v <= 3).map(([k]) => ITEM_LABELS[k]);
+  const good = entries.filter(([, v]) => v >= 4).map(([k]) => itemLabel(card, k));
+  const weak = entries.filter(([, v]) => v <= 3).map(([k]) => itemLabel(card, k));
   return {
     source: 'local' as const,
     summary: `お疲れさまでした。${good.length ? `${good.join('・')}はよくできています。` : ''}${

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Settings, Square, Subtitles, Languages, Volume2, VolumeX, Sparkles, Maximize, Minimize } from 'lucide-react';
 import { AnswerRecord, AppSettings, ExamCard, FinalReport, HistoryRecord, PhaseId, ScoredItem } from './types';
 import { EXAM_CARDS } from './data/examCards';
+import { PRE2_CARDS } from './data/pre2Cards';
+import { GRADES, gradeOf } from './lib/grade';
 import { EXAMINERS } from './data/examiners';
 import { loadHistory, loadSettings, saveHistory, saveSettings } from './lib/settings';
 import { ServerStatus, canUseClaude, fetchStatus, generateReport, EvalResult } from './lib/api';
@@ -21,6 +23,10 @@ import { SettingsModal } from './components/SettingsModal';
 import { StrategyGuideModal } from './components/StrategyGuideModal';
 
 type Screen = 'home' | 'interview' | 'report';
+
+const CARDS_BY_GRADE = { '3': EXAM_CARDS, pre2: PRE2_CARDS } as const;
+/** 記録の級（grade 追加前の記録は 3級） */
+const historyGrade = (h: HistoryRecord) => h.grade ?? (h.cardId.startsWith('pre2-') ? 'pre2' : '3');
 
 const STEPS: { id: PhaseId[]; label: string }[] = [
   { id: ['entrance', 'greeting'], label: '入室' },
@@ -84,6 +90,10 @@ export default function App() {
 
   const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
   const useClaude = canUseClaude(settings, status);
+  const cards = CARDS_BY_GRADE[settings.grade] ?? EXAM_CARDS;
+  // 面接中・結果画面は表示中カードの級、ホームは選択中の級
+  const shownGrade = screen === 'home' ? GRADES[settings.grade] ?? GRADES['3'] : GRADES[gradeOf(card)];
+  const gradeHistory = useMemo(() => history.filter((h) => historyGrade(h) === settings.grade), [history, settings.grade]);
   // 本番モード: 字幕・ヒント・認識文字・黙読タイマーを出さない
   const examMode = settings.mode === 'exam';
 
@@ -201,10 +211,12 @@ export default function App() {
         mode: settings.mode,
         total,
         passed,
+        grade: gradeOf(c),
       };
       const nextHistory = [h, ...history];
+      const sameGrade = nextHistory.filter((x) => historyGrade(x) === gradeOf(c));
       setAchievements(
-        buildAchievements(base, cardProgress(history, c.id), practiceStreak(nextHistory), passedCardCount(nextHistory), EXAM_CARDS.length)
+        buildAchievements(base, cardProgress(history, c.id), practiceStreak(nextHistory), passedCardCount(sameGrade), CARDS_BY_GRADE[gradeOf(c)].length)
       );
       setHistory(nextHistory);
       saveHistory(nextHistory);
@@ -224,8 +236,9 @@ export default function App() {
   };
 
   const nextCard = () => {
-    const i = EXAM_CARDS.findIndex((c) => c.id === card.id);
-    start(EXAM_CARDS[(i + 1) % EXAM_CARDS.length]);
+    const list = CARDS_BY_GRADE[gradeOf(card)];
+    const i = list.findIndex((c) => c.id === card.id);
+    start(list[(i + 1) % list.length]);
   };
 
   const phaseIdx = PHASE_ORDER.indexOf(phase);
@@ -235,9 +248,9 @@ export default function App() {
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
           <button onClick={goHome} className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-black text-white">3級</div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-black text-white">{shownGrade.badge}</div>
             <div className="text-left">
-              <div className="text-sm font-black leading-tight sm:text-base">英検3級 面接シミュレーター</div>
+              <div className="text-sm font-black leading-tight sm:text-base">英検{shownGrade.label} 面接シミュレーター</div>
               <div className="hidden text-[11px] text-slate-500 sm:block">2次試験（スピーキング）本番形式トレーニング</div>
             </div>
           </button>
@@ -279,7 +292,7 @@ export default function App() {
             </button>
           </div>
         )}
-        {screen === 'home' && <HomeScreen cards={EXAM_CARDS} settings={settings} history={history} onSettings={setSettings} onStart={start} />}
+        {screen === 'home' && <HomeScreen cards={cards} settings={settings} history={gradeHistory} allHistory={history} onSettings={setSettings} onStart={start} />}
 
         {screen === 'report' && (
           <ReportView
@@ -423,7 +436,7 @@ export default function App() {
       </main>
 
       <SettingsModal open={showSettings} settings={settings} status={status} onChange={setSettings} onClose={() => setShowSettings(false)} />
-      <StrategyGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
+      <StrategyGuideModal isOpen={showGuide} grade={shownGrade.id} onClose={() => setShowGuide(false)} />
     </div>
   );
 }

@@ -71,7 +71,29 @@ const EVAL_SYSTEM = `あなたは英検3級2次試験（面接）の採点官で
 - No.4/No.5: 自分のことを文で答えているか。No.5 は Yes/No と追加質問への回答の両方を合わせて評価する。
 コメントはやさしく具体的に、中学生にも分かる日本語で。`;
 
+const EVAL_SYSTEM_PRE2 = `あなたは英検準2級2次試験（面接）の採点官です。受験者の発話は音声認識テキストなので、句読点・大文字小文字・軽微な認識ゆれは減点しません。
+採点基準 (0-5点):
+- 5: 質問に的確に答え、文法的に正しい完全な文で、設問が求める情報をすべて含む。
+- 4: 内容は正しいが小さな文法ミスが1-2つ、または情報がわずかに不足。
+- 3: 内容は伝わるが、主語欠落・時制ミス・情報不足が目立つ。
+- 1-2: 一部しか答えていない、質問とずれている、単語の羅列。
+- 0: 無回答、または質問と無関係。
+設問別の注意:
+- 音読(reading): 本文との一致度・抜け/言い換え・タイトルを読んだかで評価。認識テキストの欠落は発音不明瞭の可能性として扱う。
+- No.1: 本文の該当箇所を特定し、名詞を代名詞(they/it 等)に置き換えて答えているか。How→By ~ing、Why→Because ~ / 文で答える。
+  「by doing so」「so」の前の部分を具体的に言い換えられているかが鍵。"By doing so." のように指示語のまま答えたら2点以下。本文の丸写しで代名詞にしない場合は4点。
+- No.2（イラストA・5人の動作）: イラスト説明に書かれた5人の動作を、現在進行形で1人1文ずつ言えているか。正しく説明できた人数を基準にする（5人→5点、4人→4点、3人→3点…）。
+  人物の呼び方（a man / a boy 等）や物の名前は見た目として妥当なら減点しない。現在形（kicks）など時制ミスは1人分の減点。動詞の言い換え（take a photo / take a picture 等）は正解扱い。
+- No.3（イラストB・状況説明）: 「状況（何が起きているか）」と「吹き出し（何をしたい／しようと考えているか）」の2点が言えているか。両方そろい so/because 等で自然につながっていれば5点。片方のみは3点まで。
+- No.4（意見）: Yes/No と、Why?/Why not? への理由を合わせて評価。理由が2文（主張＋具体例・補足）で論理的なら5点。1文のみは4点まで、理由が質問とずれていれば3点以下。
+- No.5（受験者自身／意見）: Yes/No と追加質問への回答を合わせて評価。具体的な内容を2文で言えれば5点。1文のみは4点まで。
+コメントはやさしく具体的に、中高生にも分かる日本語で。`;
+
+const gradeName = (g?: string) => (g === 'pre2' ? '準2級' : '3級');
+
 export interface EvaluateInput {
+  /** '3' | 'pre2'（省略時は 3級） */
+  grade?: string;
   item: string;
   itemLabel: string;
   cardTitle: string;
@@ -104,7 +126,8 @@ export async function evaluateWithClaude(client: Anthropic, model: string, b: Ev
   ]
     .filter(Boolean)
     .join('\n');
-  const result = await callStructured(client, normalizeModel(model), EVAL_SYSTEM, userPrompt, FeedbackSchema, 2000);
+  const system = b.grade === 'pre2' ? EVAL_SYSTEM_PRE2 : EVAL_SYSTEM;
+  const result = await callStructured(client, normalizeModel(model), system, userPrompt, FeedbackSchema, 2000);
   return { ...result, score: Math.max(0, Math.min(5, Math.round(result.score))), source: 'claude' as const };
 }
 
@@ -117,6 +140,7 @@ export const ReportSchema = z.object({
 });
 
 export interface ReportInput {
+  grade?: string;
   cardTitle: string;
   scores: Record<string, number>;
   attitude: number;
@@ -131,11 +155,11 @@ export async function reportWithClaude(client: Anthropic, model: string, b: Repo
 各設問の記録:
 ${JSON.stringify(b.records, null, 1)}
 
-上の記録をもとに、英検3級2次試験の総合講評を作成してください。`;
+上の記録をもとに、英検${gradeName(b.grade)}2次試験の総合講評を作成してください。`;
   const result = await callStructured(
     client,
     normalizeModel(model),
-    'あなたは英検3級2次試験の面接官兼、中学生を教える英語講師です。励ましつつ、次に何をすれば点が伸びるかを具体的に伝えます。',
+    `あなたは英検${gradeName(b.grade)}2次試験の面接官兼、${b.grade === 'pre2' ? '中高生' : '中学生'}を教える英語講師です。励ましつつ、次に何をすれば点が伸びるかを具体的に伝えます。`,
     userPrompt,
     ReportSchema,
     3000
