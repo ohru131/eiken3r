@@ -4,14 +4,7 @@ import { EvaluateInput, FeedbackSchema, ReportInput, ReportSchema, buildEvalProm
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-/** 既定モデル。*-latest は Google 側で最新の安定版に自動で切り替わるエイリアス */
-export const GEMINI_DEFAULT_EVAL_MODEL = 'gemini-flash-latest';
-export const GEMINI_DEFAULT_REPORT_MODEL = 'gemini-pro-latest';
-export const GEMINI_MODEL_SUGGESTIONS = [
-  { id: 'gemini-flash-lite-latest', note: '最速・最安' },
-  { id: 'gemini-flash-latest', note: 'バランス型（採点の標準）' },
-  { id: 'gemini-pro-latest', note: '最も精度が高い（講評の標準）' },
-];
+import { GEMINI_DEFAULT_EVAL_MODEL } from './geminiModels';
 
 export class GeminiError extends Error {
   constructor(public status: number, message: string) {
@@ -28,6 +21,7 @@ function describe(status: number, detail: string): string {
   if (status === 404) return 'Gemini のモデル名が見つかりません。設定のモデル名を確認してください。';
   if (status === 429) return 'Gemini のレート制限（または無料枠の上限）に達しました。少し待ってから再試行してください。';
   if (status === 0) return 'Gemini API に接続できません。';
+  if (status === 408) return 'Gemini の応答が時間内に返りませんでした。もう一度試すか、速いモデルに変えてください。';
   return `Gemini API エラー (${status})${detail ? `: ${detail.slice(0, 120)}` : ''}`;
 }
 
@@ -42,7 +36,8 @@ async function request(apiKey: string, path: string, init?: RequestInit, timeout
       signal: ac.signal,
     });
   } catch {
-    throw new GeminiError(0, describe(0, ''));
+    // 自前のタイムアウトで中断した場合は「時間切れ」として区別する
+    throw ac.signal.aborted ? new GeminiError(408, describe(408, '')) : new GeminiError(0, describe(0, ''));
   } finally {
     clearTimeout(t);
   }
@@ -85,7 +80,8 @@ async function generateStructured<T extends z.ZodType>(
   user: string,
   responseSchema: object,
   schema: T,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs: number
 ): Promise<z.infer<T>> {
   const data = await request(apiKey, `${modelPath(model)}:generateContent`, {
     method: 'POST',
@@ -95,11 +91,11 @@ async function generateStructured<T extends z.ZodType>(
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema,
-        temperature: 0.4,
+        // 思考（thinking）トークンも上限に含まれるため余裕を持たせる。temperature は既定値のまま（Gemini 3 世代の推奨）
         maxOutputTokens: maxTokens,
       },
     }),
-  });
+  }, timeoutMs);
   const cand = data?.candidates?.[0];
   if (!cand) throw new GeminiError(502, data?.promptFeedback?.blockReason ? 'Gemini が回答を拒否しました。' : 'Gemini から回答がありませんでした。');
   const text = (cand.content?.parts || [])
@@ -119,13 +115,13 @@ async function generateStructured<T extends z.ZodType>(
 
 export async function evaluateWithGemini(apiKey: string, model: string, b: EvaluateInput) {
   const p = buildEvalPrompt(b);
-  const r = await generateStructured(apiKey, model, p.system, p.user, FEEDBACK_RESPONSE_SCHEMA, FeedbackSchema, 8192);
+  const r = await generateStructured(apiKey, model, p.system, p.user, FEEDBACK_RESPONSE_SCHEMA, FeedbackSchema, 16384, 60_000);
   return { ...r, score: clampScore(r.score), source: 'gemini' as const };
 }
 
 export async function reportWithGemini(apiKey: string, model: string, b: ReportInput) {
   const p = buildReportPrompt(b);
-  const r = await generateStructured(apiKey, model, p.system, p.user, REPORT_RESPONSE_SCHEMA, ReportSchema, 8192);
+  const r = await generateStructured(apiKey, model, p.system, p.user, REPORT_RESPONSE_SCHEMA, ReportSchema, 32768, 120_000);
   return { ...r, source: 'gemini' as const };
 }
 

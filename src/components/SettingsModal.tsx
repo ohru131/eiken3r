@@ -4,7 +4,7 @@ import { AppSettings } from '../types';
 import { MODEL_OPTIONS } from '../lib/settings';
 import { ServerStatus } from '../lib/api';
 import { azureConfigured, testAzure } from '../lib/azurePronunciation';
-import { GEMINI_DEFAULT_EVAL_MODEL, GEMINI_DEFAULT_REPORT_MODEL, GEMINI_MODEL_SUGGESTIONS } from '../lib/gemini';
+import { GEMINI_DEFAULT_EVAL_MODEL, GEMINI_DEFAULT_REPORT_MODEL, GEMINI_MODEL_SUGGESTIONS } from '../lib/geminiModels';
 
 interface Props {
   open: boolean;

@@ -51,7 +51,7 @@ export function isYesAnswer(text: string): boolean | null {
   if (!w.length) return null;
   const head = w.slice(0, 4).join(' ');
   if (/^(no|nope|not really|i don't|i do not|i haven't|i have not|i'm not|i am not|i didn't|never|i disagree)\b/.test(head)) return false;
-  if (/^(yes|yeah|yep|sure|of course|i do|i have|i am|i'm|i did|i like|i love)\b/.test(head)) return true;
+  if (/^(yes|yeah|yep|sure|of course|i do|i have|i am|i'm|i did|i like|i love|i think so|i agree|i guess so)\b/.test(head)) return true;
   if (w.includes('no') || w.includes("don't")) return false;
   return true;
 }
@@ -121,8 +121,8 @@ export function localEvaluate(card: ExamCard, rec: AnswerRecord): StepFeedback {
   const pre2 = gradeOf(card) === 'pre2';
   let score: number;
   if (pre2 && rec.item === 'q2') {
-    // 準2級 No.2: 5人の動作を進行形で言えた数（~ing の数）でおおまかに採点
-    const actions = new Set(w.filter((x) => x.length > 4 && x.endsWith('ing'))).size;
+    // 準2級 No.2: 5人の動作を進行形（is/are ~ing）で言えた数でおおまかに採点
+    const actions = (w.join(' ').match(/\b(?:is|are|'s|he's|she's|they're)\s+\w+ing\b/g) || []).length;
     score = Math.max(1, Math.min(5, actions));
   } else if (rec.item === 'q4' || rec.item === 'q5') {
     // 準2級は理由を2文（約12語以上）求められる
