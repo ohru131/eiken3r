@@ -4,6 +4,7 @@ import { AppSettings } from '../types';
 import { MODEL_OPTIONS } from '../lib/settings';
 import { ServerStatus } from '../lib/api';
 import { azureConfigured, testAzure } from '../lib/azurePronunciation';
+import { GEMINI_DEFAULT_EVAL_MODEL, GEMINI_DEFAULT_REPORT_MODEL, GEMINI_MODEL_SUGGESTIONS } from '../lib/geminiModels';
 
 interface Props {
   open: boolean;
@@ -38,7 +39,24 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
           </button>
         </div>
         <div className="space-y-5 p-5 text-sm">
-          {/* API */}
+          {/* AI 採点 */}
+          <section>
+            <div className="mb-1.5 font-black text-slate-900">AI 採点に使うサービス</div>
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 text-xs font-bold">
+              {(['claude', 'gemini'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => set('aiProvider', p)}
+                  className={`rounded-lg px-3 py-1.5 ${settings.aiProvider === p ? 'bg-white text-slate-900 shadow' : 'text-slate-500'}`}
+                >
+                  {p === 'claude' ? 'Claude（Anthropic）' : 'Gemini（Google）'}
+                </button>
+              ))}
+            </div>
+          </section>
+          {settings.aiProvider === 'gemini' ? (
+            <GeminiSection settings={settings} set={set} />
+          ) : (
           <section>
             <div className="mb-1.5 flex items-center gap-1.5 font-black text-slate-900">
               <KeyRound className="h-4 w-4" /> Claude API キー
@@ -97,6 +115,7 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
               目安: 面接1回あたり 約0.02ドル（標準設定）。本番モードは面接を止めずに裏で採点するので、待ち時間はほぼありません。
             </p>
           </section>
+          )}
 
           {/* azure */}
           <AzureSection settings={settings} set={set} />
@@ -132,6 +151,113 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
     </div>
   );
 };
+
+type SetFn = <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void;
+
+const GeminiSection: React.FC<{ settings: AppSettings; set: SetFn }> = ({ settings, set }) => {
+  const [show, setShow] = useState(false);
+  const [test, setTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'ng'; msg?: string }>({ state: 'idle' });
+  const runTest = async () => {
+    setTest({ state: 'testing' });
+    const m = await import('../lib/gemini');
+    const err = (await m.testGemini(settings.geminiKey, settings.geminiEvalModel)) ?? (await m.testGemini(settings.geminiKey, settings.geminiReportModel));
+    setTest(err ? { state: 'ng', msg: err } : { state: 'ok' });
+  };
+  const keyOk = !!settings.geminiKey;
+  return (
+    <section>
+      <div className="mb-1.5 flex items-center gap-1.5 font-black text-slate-900">
+        <KeyRound className="h-4 w-4" /> Gemini API キー
+      </div>
+      <div className="flex gap-2">
+        <input
+          type={show ? 'text' : 'password'}
+          value={settings.geminiKey}
+          onChange={(e) => {
+            set('geminiKey', e.target.value.trim());
+            setTest({ state: 'idle' });
+          }}
+          placeholder="AIza..."
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs outline-none focus:border-indigo-500"
+        />
+        <button onClick={() => setShow((v) => !v)} className="rounded-lg border border-slate-300 px-2 text-slate-500">
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+      <div className={`mt-1.5 flex items-center gap-1 text-xs ${keyOk ? 'text-emerald-700' : 'text-amber-700'}`}>
+        {keyOk ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+        {keyOk ? 'キー設定済み：Gemini でAI採点します（「接続テスト」で確認できます）' : '未設定：簡易採点（ローカル判定）で動作します'}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          onClick={runTest}
+          disabled={!settings.geminiKey || test.state === 'testing'}
+          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+        >
+          {test.state === 'testing' ? '確認中…' : '接続テスト'}
+        </button>
+        {settings.geminiKey && (
+          <button
+            onClick={() => {
+              set('geminiKey', '');
+              setTest({ state: 'idle' });
+            }}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600"
+          >
+            キーを削除
+          </button>
+        )}
+        {test.state === 'ok' && <span className="text-xs font-bold text-emerald-700">接続OK</span>}
+        {test.state === 'ng' && <span className="text-xs font-bold text-rose-600">{test.msg}</span>}
+      </div>
+      <p className="mt-1.5 text-[12px] leading-relaxed text-slate-500">
+        キーはこの端末のブラウザ（localStorage）にだけ保存され、採点時にブラウザから直接 Google の Gemini API へ送信されます。共用PCでは使用後に「キーを削除」してください。キーは{' '}
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-indigo-600 underline">
+          Google AI Studio
+        </a>{' '}
+        で発行できます（無料枠あり）。
+      </p>
+      <GeminiModelInput
+        label={`1問ごとの採点（標準: ${GEMINI_DEFAULT_EVAL_MODEL}）`}
+        value={settings.geminiEvalModel}
+        onChange={(v) => {
+          set('geminiEvalModel', v);
+          setTest({ state: 'idle' });
+        }}
+      />
+      <GeminiModelInput
+        label={`最後の総合講評（標準: ${GEMINI_DEFAULT_REPORT_MODEL}）`}
+        value={settings.geminiReportModel}
+        onChange={(v) => {
+          set('geminiReportModel', v);
+          setTest({ state: 'idle' });
+        }}
+      />
+      <p className="mt-1 text-[12px] text-slate-500">
+        「-latest」は Google 側で最新の安定版に自動で切り替わる名前です。特定のバージョン（例: gemini-2.5-flash）も直接入力できます。
+      </p>
+    </section>
+  );
+};
+
+const GeminiModelInput: React.FC<{ label: string; value: string; onChange: (v: string) => void }> = ({ label, value, onChange }) => (
+  <label className="mt-3 block">
+    <span className="block text-xs font-bold text-slate-700">{label}</span>
+    <input
+      list="gemini-models"
+      value={value}
+      onChange={(e) => onChange(e.target.value.trim())}
+      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs"
+    />
+    <datalist id="gemini-models">
+      {GEMINI_MODEL_SUGGESTIONS.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.note}
+        </option>
+      ))}
+    </datalist>
+  </label>
+);
 
 const AzureSection: React.FC<{ settings: AppSettings; set: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void }> = ({ settings, set }) => {
   const [show, setShow] = useState(false);

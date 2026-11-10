@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Award, RotateCcw, Home, ChevronDown, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import { AnswerRecord, ExamCard, FinalReport, ScoredItem } from '../types';
-import { ITEM_LABELS, PASS_LINE } from '../lib/scoring';
+import { PASS_LINE } from '../lib/scoring';
+import { hasFollowUp, itemLabel, sceneFor } from '../lib/grade';
 import { FeedbackBody, ScoreDots } from './FeedbackPanel';
 import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
 import { Achievement, ScoreHero } from './ScoreHero';
@@ -65,7 +66,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
           <Sparkles className="h-4 w-4 text-indigo-600" /> 総合講評
           {aiPending && (
             <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400">
-              <Loader2 className="h-3 w-3 animate-spin" /> Claude が講評を作成中…
+              <Loader2 className="h-3 w-3 animate-spin" /> AI が講評を作成中…
             </span>
           )}
         </div>
@@ -112,6 +113,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
         {ORDER.map((k) => {
           const rec = records.find((r) => r.item === k);
           const q = k === 'reading' ? null : card[k];
+          const pic = sceneFor(card, k);
           const isOpen = open.has(k);
           const sc = report.scores[k];
           return (
@@ -121,7 +123,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                 }`}
             >
               <button onClick={() => toggle(k)} aria-expanded={isOpen} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-indigo-50/50">
-                <div className="w-28 shrink-0 text-xs font-black text-slate-700">{ITEM_LABELS[k]}</div>
+                <div className="w-28 shrink-0 text-xs font-black text-slate-700">{itemLabel(card, k)}</div>
                 <div className="min-w-0 flex-1 truncate text-sm text-slate-600">{[rec?.answer, rec?.followUpAnswer].filter(Boolean).join(' / ') || '（無回答）'}</div>
                 <ScoreDots score={report.scores[k]} />
                 <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-indigo-700">
@@ -136,11 +138,11 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                     <div className="font-semibold text-slate-900">{q ? q.text : 'Please read the passage aloud.'}</div>
                     {q && <div className="text-xs text-slate-500">{q.ja}</div>}
                   </div>
-                  {(k === 'q2' || k === 'q3') && (
+                  {pic && (
                     <div>
-                      <div className="mb-1 text-[12px] font-bold text-slate-500">イラスト</div>
+                      <div className="mb-1 text-[12px] font-bold text-slate-500">イラスト{pic.label ?? ''}</div>
                       <div className="max-w-md">
-                        <SceneIllustration scene={card.scene} cardId={card.id} />
+                        <SceneIllustration scene={pic.scene} cardId={pic.cardId} label={pic.label} />
                       </div>
                     </div>
                   )}
@@ -180,6 +182,24 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                           </li>
                         ))}
                       </ul>
+                      {hasFollowUp(q) &&
+                        ([
+                          [`Yes →「${q.followUpYes}」`, q.modelAnswersYes],
+                          [`No →「${q.followUpNo}」`, q.modelAnswersNo],
+                        ] as const).map(([title, items]) => (
+                          <div key={title}>
+                            <div className="mt-1 text-[12px] font-bold text-indigo-800">{title}</div>
+                            <ul className="ml-4 list-disc">
+                              {items.map((m, i) => (
+                                <li key={i}>
+                                  <button className="text-left hover:text-indigo-700" onClick={() => onSpeak(m)}>
+                                    {m} 🔊
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>

@@ -1,9 +1,11 @@
 import { AnswerRecord, AppSettings, ExamCard, FinalReport, ScoredItem, StepFeedback } from '../types';
-import { ITEM_LABELS, getQuestion, localEvaluate } from './scoring';
+import { getQuestion, localEvaluate } from './scoring';
+import { gradeOf, hasFollowUp, itemLabel, sceneFor } from './grade';
 import { summarizeAssessment } from './azurePronunciation';
 import type Anthropic from '@anthropic-ai/sdk';
 
 const loadClaude = () => import('./claude');
+const loadGemini = () => import('./gemini');
 
 export interface ServerStatus {
   serverKey: boolean;
@@ -38,7 +40,12 @@ async function callClaude<T>(s: AppSettings, model: string, path: string, body: 
   return data as T;
 }
 
-export const canUseClaude = (s: AppSettings, status: ServerStatus) => !!s.apiKey || status.serverKey;
+/** AI 採点が使えるか（Gemini はブラウザのキーのみ。Claude はサーバーのキーも可） */
+export const canUseAI = (s: AppSettings, status: ServerStatus) =>
+  s.aiProvider === 'gemini' ? !!s.geminiKey : !!s.apiKey || status.serverKey;
+
+/** ヘッダー等に出す AI 名 */
+export const aiName = (s: AppSettings) => (s.aiProvider === 'gemini' ? 'Gemini' : 'Claude');
 
 export type EvalResult = StepFeedback & { error?: string };
 
@@ -51,13 +58,14 @@ export async function evaluateAnswer(
   if (!useClaude) return localEvaluate(card, rec);
   const q = getQuestion(card, rec.item);
   const body = {
+    grade: gradeOf(card),
     item: rec.item,
-    itemLabel: ITEM_LABELS[rec.item],
+    itemLabel: itemLabel(card, rec.item),
     cardTitle: card.title,
     passage: card.passage,
-    sceneDescription: rec.item === 'q2' || rec.item === 'q3' ? card.scene.description : '',
+    sceneDescription: sceneFor(card, rec.item)?.scene.description ?? '',
     question: rec.question,
-    modelAnswers: q ? q.modelAnswers : [card.passage],
+    modelAnswers: q ? (hasFollowUp(q) ? [...q.modelAnswers, ...q.modelAnswersYes, ...q.modelAnswersNo] : q.modelAnswers) : [card.passage],
     answer: rec.answer,
     followUpQuestion: rec.followUpQuestion,
     followUpAnswer: rec.followUpAnswer,
@@ -65,6 +73,7 @@ export async function evaluateAnswer(
     pronunciationSummary: rec.pronunciation ? summarizeAssessment(rec.pronunciation) : undefined,
   };
   try {
+    if (settings.aiProvider === 'gemini') return await (await loadGemini()).evaluateWithGemini(settings.geminiKey, settings.geminiEvalModel, body);
     return await callClaude<StepFeedback>(settings, settings.evalModel, 'api/evaluate', body, (c, m) => m.evaluateWithClaude(c, settings.evalModel, body));
   } catch (e: any) {
     return { ...localEvaluate(card, rec), error: e?.message || 'network' };
@@ -81,17 +90,18 @@ export async function generateReport(
   settings: AppSettings,
   useClaude: boolean
 ): Promise<Pick<FinalReport, 'summary' | 'strengths' | 'improvements' | 'nextSteps' | 'source'>> {
-  const local = () => localReport(records, scores);
+  const local = () => localReport(card, records, scores);
   if (!useClaude) return local();
   try {
     const body = {
+        grade: gradeOf(card),
         cardTitle: card.title,
         scores,
         attitude,
         total,
         passLine,
         records: records.map((x) => ({
-          item: ITEM_LABELS[x.item],
+          item: itemLabel(card, x.item),
           question: x.question,
           answer: x.answer || '(無回答)',
           followUp: x.followUpQuestion ? `${x.followUpQuestion} → ${x.followUpAnswer || '(無回答)'}` : undefined,
@@ -99,21 +109,22 @@ export async function generateReport(
           latencySec: x.latencySec,
         })),
     };
+    if (settings.aiProvider === 'gemini') return await (await loadGemini()).reportWithGemini(settings.geminiKey, settings.geminiReportModel, body);
     return await callClaude(settings, settings.reportModel, 'api/report', body, (c, m) => m.reportWithClaude(c, settings.reportModel, body));
   } catch {
     return local();
   }
 }
 
-function localReport(records: AnswerRecord[], scores: Record<ScoredItem, number>) {
+function localReport(card: ExamCard, records: AnswerRecord[], scores: Record<ScoredItem, number>) {
   const entries = Object.entries(scores) as [ScoredItem, number][];
-  const good = entries.filter(([, v]) => v >= 4).map(([k]) => ITEM_LABELS[k]);
-  const weak = entries.filter(([, v]) => v <= 3).map(([k]) => ITEM_LABELS[k]);
+  const good = entries.filter(([, v]) => v >= 4).map(([k]) => itemLabel(card, k));
+  const weak = entries.filter(([, v]) => v <= 3).map(([k]) => itemLabel(card, k));
   return {
     source: 'local' as const,
     summary: `お疲れさまでした。${good.length ? `${good.join('・')}はよくできています。` : ''}${
       weak.length ? `${weak.join('・')}は模範解答を声に出して練習しましょう。` : '全体的に安定しています。'
-    }（Claude APIキーを設定すると、あなたの発話に合わせた詳しい講評が表示されます）`,
+    }（Claude または Gemini の APIキーを設定すると、あなたの発話に合わせた詳しい講評が表示されます）`,
     strengths: good.length ? good.map((g) => `${g}で的確に答えられた`) : ['最後まで面接を受けきった'],
     improvements: weak.length ? weak.map((w) => (w === '音読' ? '音読: タイトルから最後まで、区切りを意識してはっきり読む' : `${w}: 主語＋動詞の完全な文で答える`)) : ['No.4・No.5で2文目を足して内容を広げる'],
     nextSteps: '間違えた設問を練習モードでもう一度。模範解答を3回音読してから本番モードに挑戦しましょう。',

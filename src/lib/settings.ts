@@ -1,4 +1,5 @@
 import { AppSettings, HistoryRecord } from '../types';
+import { GRADES } from './grade';
 
 const KEY = 'eiken3_settings_v2';
 const HISTORY_KEY = 'eiken3_history_v2';
@@ -15,11 +16,16 @@ export const DEFAULT_EVAL_MODEL = 'claude-haiku-5-5';
 export const DEFAULT_REPORT_MODEL = 'claude-sonnet-5-5';
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  aiProvider: 'claude',
   apiKey: '',
+  geminiKey: '',
+  geminiEvalModel: 'gemini-flash-latest',
+  geminiReportModel: 'gemini-pro-latest',
   evalModel: DEFAULT_EVAL_MODEL,
   reportModel: DEFAULT_REPORT_MODEL,
   settingsVersion: SETTINGS_VERSION,
   mode: 'exam',
+  grade: '3',
   examinerId: 'smith',
   speechRate: 1,
   sfx: true,
@@ -38,6 +44,9 @@ export function loadSettings(): AppSettings {
     const saved = JSON.parse(raw);
     delete saved.model; // 旧形式（採点・講評共通の1モデル）
     const merged: AppSettings = { ...DEFAULT_SETTINGS, ...saved };
+    // 不正な値（手動編集・将来の形式など）は既定値に戻す
+    if (!(merged.grade in GRADES)) merged.grade = DEFAULT_SETTINGS.grade;
+    if (merged.aiProvider !== 'claude' && merged.aiProvider !== 'gemini') merged.aiProvider = DEFAULT_SETTINGS.aiProvider;
     if (saved.settingsVersion !== SETTINGS_VERSION) {
       // 旧バージョンの設定はモデルだけ強制的に新しい既定値へ（APIキー等はそのまま）
       merged.evalModel = DEFAULT_EVAL_MODEL;

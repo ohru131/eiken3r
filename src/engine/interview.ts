@@ -5,6 +5,7 @@ import { playSfx } from '../lib/sfx';
 import { EvalResult, evaluateAnswer } from '../lib/api';
 import { isYesAnswer } from '../lib/scoring';
 import { AzureUnavailableError, azureConfigured, listenReadingAzure } from '../lib/azurePronunciation';
+import { gradeInfo, gradeOf, hasFollowUp } from '../lib/grade';
 
 export const modelReadingText = (card: ExamCard) => `${card.title}. ${card.passage}`;
 
@@ -43,6 +44,8 @@ export async function runInterview(
   signal: AbortSignal
 ): Promise<InterviewResult> {
   const practice = settings.mode === 'practice';
+  const pre2 = gradeOf(card) === 'pre2';
+  const grade = gradeInfo(card);
   const records = new Map<ScoredItem, AnswerRecord>();
   const latest = new Map<ScoredItem, AnswerRecord>();
   const evalPromises: Promise<void>[] = [];
@@ -66,10 +69,13 @@ export async function runInterview(
     await sleep(250, signal);
   };
 
-  const hear = async (kind: 'short' | 'answer' | 'reading', hint: string): Promise<ListenResult> => {
+  const hear = async (kind: 'short' | 'answer' | 'long' | 'reading', hint: string): Promise<ListenResult> => {
     const cfg =
       kind === 'reading'
         ? { silenceMs: Math.max(3000, settings.silenceSec * 1500), noSpeechMs: 15000, maxMs: 90000 }
+        : kind === 'long'
+          ? // 準2級 No.2（5人の動作）: 人物を探す間の沈黙を許容し、長めに聞く
+            { silenceMs: Math.max(3000, settings.silenceSec * 1400), noSpeechMs: 15000, maxMs: 75000 }
         : kind === 'answer'
           ? { silenceMs: settings.silenceSec * 1000, noSpeechMs: 12000, maxMs: 45000 }
           : { silenceMs: Math.min(1500, settings.silenceSec * 1000), noSpeechMs: 7000, maxMs: 15000 };
@@ -154,19 +160,21 @@ export async function runInterview(
   /** 採点対象の質問。聞き返し・無言時の繰り返し・練習モードの解説/やり直しを含む */
   const ask = async (item: Exclude<ScoredItem, 'reading'>, prefix: string) => {
     const q = card[item];
+    const kind = pre2 && item === 'q2' ? 'long' : 'answer';
+    const firstHint = pre2 && item === 'q2' ? '5人の動作を1人ずつ説明しましょう' : '英語で答えてください';
     for (;;) {
       let pardonUsed = false;
       await say(`${prefix}${q.text}`, q.ja);
-      let r = await hear('answer', '英語で答えてください');
+      let r = await hear(kind, firstHint);
 
       for (let tries = 0; tries < 2; tries++) {
         if (r.reason === 'pardon' || (PARDON_RE.test(r.text) && r.text.split(' ').length <= 5)) {
           pardonUsed = true;
           await say(`All right. ${q.text}`, q.ja);
-          r = await hear('answer', 'もう一度どうぞ');
+          r = await hear(kind, 'もう一度どうぞ');
         } else if (!r.text && r.reason === 'nospeech' && tries === 0) {
           await say(`I'll say it again. ${q.text}`, q.ja);
-          r = await hear('answer', '英語で答えてください');
+          r = await hear(kind, firstHint);
         } else break;
       }
 
@@ -178,11 +186,11 @@ export async function runInterview(
         pardonUsed,
       };
 
-      if (item === 'q5' && r.text) {
+      if (hasFollowUp(q) && r.text) {
         const yes = isYesAnswer(r.text);
-        const follow = yes === false ? card.q5.followUpNo : card.q5.followUpYes;
+        const follow = yes === false ? q.followUpNo : q.followUpYes;
         await say(follow);
-        const f = await hear('answer', '続けてもう少し話しましょう');
+        const f = await hear('answer', pre2 ? '2文で詳しく答えましょう' : '続けてもう少し話しましょう');
         rec.followUpQuestion = follow;
         rec.followUpAnswer = f.text;
       }
@@ -219,7 +227,7 @@ export async function runInterview(
     );
     const m = nameRes.text.match(/(?:my name is|i am|i'm)\s+([a-z]+)/i);
     candidateName = m ? m[1][0].toUpperCase() + m[1].slice(1) : '';
-    await smallTalk('This is the Grade 3 test. OK?', '返事をしましょう (OK. / Yes.)', 'これは3級のテストです。いいですか？');
+    await smallTalk(`This is the ${grade.spoken} test. OK?`, '返事をしましょう (OK. / Yes.)', `これは${grade.spokenJa}のテストです。いいですか？`);
     await smallTalk('How are you?', '答えましょう (I\'m fine, thank you.)', '調子はどうですか？');
     await say("Good. Let's start the test. Here is your card.", 'では、テストを始めましょう。こちらがカードです。');
 
@@ -282,10 +290,17 @@ export async function runInterview(
 
     // ---- カードを裏返す ----
     bridge.setPhase('turnover');
-    await say(
-      `Now, ${candidateName ? candidateName + ', ' : ''}please turn the card over.`,
-      'では、カードを裏返してください。'
-    );
+    if (pre2) {
+      await say(
+        `Now, ${candidateName ? candidateName + ', ' : ''}please turn over the card and put it down.`,
+        'では、カードを裏返して置いてください。'
+      );
+    } else {
+      await say(
+        `Now, ${candidateName ? candidateName + ', ' : ''}please turn the card over.`,
+        'では、カードを裏返してください。'
+      );
+    }
     playSfx('flip');
     bridge.setCardState('back');
     await sleep(900, signal);

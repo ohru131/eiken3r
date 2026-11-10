@@ -64,8 +64,9 @@ export interface CardQuestion {
   commonMistakes?: string[];
 }
 
-export interface Question5 extends CardQuestion {
-  /** Yes と答えた時の追加質問 (例: "Please tell me more.") */
+/** Yes/No で答えたあとに追加質問がある設問 */
+export interface FollowUp {
+  /** Yes と答えた時の追加質問 (例: "Please tell me more." / "Why?") */
   followUpYes: string;
   /** No と答えた時の追加質問 (例: "Why not?" / "What do you want to do ...?") */
   followUpNo: string;
@@ -73,8 +74,18 @@ export interface Question5 extends CardQuestion {
   modelAnswersNo: string[];
 }
 
+export interface Question5 extends CardQuestion, FollowUp {}
+
+/** No.4: 3級は通常の質問、準2級は Yes/No + Why?/Why not? */
+export type Question4 = CardQuestion & Partial<FollowUp>;
+
+/** 級。'3' = 3級、'pre2' = 準2級 */
+export type Grade = '3' | 'pre2';
+
 export interface ExamCard {
   id: string;
+  /** 級（省略時は 3級） */
+  grade?: Grade;
   title: string; // パッセージのタイトル（英語）
   japaneseTitle: string;
   category: string;
@@ -82,12 +93,15 @@ export interface ExamCard {
   passage: string; // 30〜40語程度の英文
   passageJa: string;
   vocabulary: VocabularyHelp[];
+  /** 3級: イラスト / 準2級: イラストA（人物5人の動作） */
   scene: Scene;
+  /** 準2級のみ: イラストB（人物の状況説明） */
+  sceneB?: Scene;
   q1: CardQuestion; // パッセージについて
-  q2: CardQuestion; // イラストについて
-  q3: CardQuestion; // イラストについて
-  q4: CardQuestion; // 受験者自身について（カード裏返し後）
-  q5: Question5; // 受験者自身について (Yes/No + 追加質問)
+  q2: CardQuestion; // 3級: イラスト / 準2級: イラストAの5人の動作
+  q3: CardQuestion; // 3級: イラスト / 準2級: イラストBの状況
+  q4: Question4; // 3級: 受験者自身 / 準2級: 意見（Yes/No + Why?）
+  q5: Question5; // 受験者自身・意見 (Yes/No + 追加質問)
 }
 
 // ===== 面接官 =====
@@ -133,7 +147,7 @@ export interface StepFeedback {
   corrections: string;
   improvedAnswer: string;
   tip: string;
-  source: 'claude' | 'local';
+  source: AiSource;
 }
 
 /** Azure 発音評価の結果（音読のみ） */
@@ -179,7 +193,7 @@ export interface FinalReport {
   strengths: string[];
   improvements: string[];
   nextSteps: string;
-  source: 'claude' | 'local';
+  source: AiSource;
 }
 
 export interface HistoryRecord {
@@ -190,17 +204,35 @@ export interface HistoryRecord {
   mode: InterviewMode;
   total: number;
   passed: boolean;
+  grade?: Grade;
 }
 
+/** 採点したAI（local = APIキーなしの簡易採点） */
+export type AiSource = 'claude' | 'gemini' | 'local';
+
+/** 採点・講評に使う AI */
+export type AiProvider = 'claude' | 'gemini';
+
 export interface AppSettings {
+  /** 採点・講評に使う AI */
+  aiProvider: AiProvider;
+  /** Claude API キー */
   apiKey: string;
   /** 1問ごとの採点に使うモデル */
   evalModel: string;
   /** 総合講評に使うモデル */
   reportModel: string;
+  /** Gemini API キー */
+  geminiKey: string;
+  /** Gemini: 1問ごとの採点モデル */
+  geminiEvalModel: string;
+  /** Gemini: 総合講評モデル */
+  geminiReportModel: string;
   /** 設定の形式バージョン（上がると既存ブラウザのモデル設定を上書き） */
   settingsVersion: number;
   mode: InterviewMode;
+  /** 練習する級 */
+  grade: Grade;
   examinerId: string;
   speechRate: number; // 0.7 - 1.2
   sfx: boolean;
