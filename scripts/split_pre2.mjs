@@ -39,10 +39,24 @@ export async function split2x2(inputPath, ids, outputDir = 'public/images/pre2')
     { left: halfW, top: halfH, width: width - halfW, height: height - halfH }, // Bottom-Right
   ];
 
+  // Custom region overrides for grids with non-50/50 dividers
+  const CUSTOM_REGIONS = {
+    'pre2-19-a': { region: { left: 16, top: 13, width: 662, height: 361 }, fit: 'cover' },
+    'pre2-19-b': { region: { left: 698, top: 13, width: 662, height: 361 }, fit: 'cover' },
+    'pre2-20-a': { region: { left: 17, top: 396, width: 770, height: 358 }, fit: 'contain' },
+    'pre2-20-b': { region: { left: 809, top: 396, width: 550, height: 358 }, fit: 'cover' },
+    'pre2-23-a': { region: { left: 23, top: 20, width: 874, height: 372 }, fit: 'contain' },
+    'pre2-23-b': { region: { left: 903, top: 20, width: 450, height: 372 }, fit: 'cover' },
+    'pre2-24-a': { region: { left: 23, top: 399, width: 814, height: 349 }, fit: 'contain' },
+    'pre2-24-b': { region: { left: 844, top: 399, width: 508, height: 349 }, fit: 'cover' },
+  };
+
   for (let i = 0; i < 4; i++) {
     const id = ids[i];
     if (!id) continue;
-    const region = regions[i];
+    const custom = CUSTOM_REGIONS[id];
+    const region = custom ? custom.region : regions[i];
+    const fit = custom ? custom.fit : 'cover';
     const outPath = path.join(outputDir, `${id}.png`);
 
     // In a 16:9 grid, each quadrant is 16:9 (1.78 aspect ratio).
@@ -51,7 +65,7 @@ export async function split2x2(inputPath, ids, outputDir = 'public/images/pre2')
     // preserving 100% of vertical height so heads and ground are completely intact!
     await sharp(inputPath)
       .extract(region)
-      .resize(1200, 720, { fit: 'cover' })
+      .resize(1200, 720, { fit, background: { r: 255, g: 255, b: 255, alpha: 1 } })
       .toFormat('png')
       .toFile(outPath);
 
