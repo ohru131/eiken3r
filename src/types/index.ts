@@ -147,7 +147,7 @@ export interface StepFeedback {
   corrections: string;
   improvedAnswer: string;
   tip: string;
-  source: 'claude' | 'local';
+  source: AiSource;
 }
 
 /** Azure 発音評価の結果（音読のみ） */
@@ -193,7 +193,7 @@ export interface FinalReport {
   strengths: string[];
   improvements: string[];
   nextSteps: string;
-  source: 'claude' | 'local';
+  source: AiSource;
 }
 
 export interface HistoryRecord {
@@ -207,12 +207,27 @@ export interface HistoryRecord {
   grade?: Grade;
 }
 
+/** 採点したAI（local = APIキーなしの簡易採点） */
+export type AiSource = 'claude' | 'gemini' | 'local';
+
+/** 採点・講評に使う AI */
+export type AiProvider = 'claude' | 'gemini';
+
 export interface AppSettings {
+  /** 採点・講評に使う AI */
+  aiProvider: AiProvider;
+  /** Claude API キー */
   apiKey: string;
   /** 1問ごとの採点に使うモデル */
   evalModel: string;
   /** 総合講評に使うモデル */
   reportModel: string;
+  /** Gemini API キー */
+  geminiKey: string;
+  /** Gemini: 1問ごとの採点モデル */
+  geminiEvalModel: string;
+  /** Gemini: 総合講評モデル */
+  geminiReportModel: string;
   /** 設定の形式バージョン（上がると既存ブラウザのモデル設定を上書き） */
   settingsVersion: number;
   mode: InterviewMode;

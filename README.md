@@ -25,14 +25,24 @@
 
 準2級のイラストは仮（絵文字で描いた簡易版、右上に「仮イラスト」表示）。画像生成AIで作った画像を `public/images/pre2/<カードID>-a.png`（イラストA）・`<カードID>-b.png`（イラストB）に置くと自動で差し替わる。作成用プロンプトと仕様は [docs/pre2-image-prompts.md](docs/pre2-image-prompts.md)。
 
-## AI 採点（Claude API）
+## AI 採点（Claude API / Gemini API）
 
-採点・講評に Anthropic の Claude API を使用。
+採点・講評に Anthropic の Claude API、または Google の Gemini API を使用。アプリ右上の「設定」→「AI 採点に使うサービス」で切り替える。
 
-1. アプリ右上の「設定」で API キーを入力 → 「接続テスト」で確認。キーはブラウザの localStorage にだけ保存され、ブラウザから直接 Anthropic API を呼ぶ（GitHub Pages 版はこの方式）
+### Claude
+
+1. 「設定」で Claude を選び、API キーを入力 → 「接続テスト」で確認。キーはブラウザの localStorage にだけ保存され、ブラウザから直接 Anthropic API を呼ぶ（GitHub Pages 版はこの方式）
 2. ローカル開発時はサーバーの環境変数 `ANTHROPIC_API_KEY`（`.env.example` 参照）でも可
 
-モデルは標準で「1問ごとの採点 = Haiku 5.5」「総合講評 = Sonnet 5.5」（面接1回 約0.02ドル）。設定画面でそれぞれ変更可能。キー未設定時はローカルの簡易採点で動作。
+モデルは標準で「1問ごとの採点 = Haiku 5.5」「総合講評 = Sonnet 5.5」（面接1回 約0.02ドル）。設定画面でそれぞれ変更可能。
+
+### Gemini
+
+1. [Google AI Studio](https://aistudio.google.com/apikey) で API キーを発行（無料枠あり）
+2. 「設定」で Gemini を選び、キーを入力 → 「接続テスト」。キーはブラウザの localStorage にだけ保存され、ブラウザから直接 Gemini API を呼ぶ（サーバー経由には未対応）
+3. モデルは標準で「採点 = `gemini-flash-latest`」「講評 = `gemini-pro-latest`」（Google 側で最新の安定版に自動追従する名前）。`gemini-2.5-flash` など特定バージョンも入力可能
+
+キー未設定時はローカルの簡易採点で動作。採点プロンプトは `src/lib/prompts.ts` で Claude / Gemini 共通。
 
 ## 音読の発音評価（Azure Speech・任意）
 
@@ -60,6 +70,8 @@ bun run dev   # http://localhost:3000
 ## 構成
 
 - `server.ts` — Express + Vite。`/api/evaluate`（1問採点）・`/api/report`（総合講評）で Claude API を呼ぶ
+- `src/lib/prompts.ts` — 採点・講評のプロンプトと出力スキーマ（Claude / Gemini 共通）
+- `src/lib/claude.ts` / `src/lib/gemini.ts` — 各 API の呼び出し
 - `src/engine/interview.ts` — 面接の進行スクリプト（発話 → 自動録音 → 無音検知 → 次へ）
 - `src/lib/speech.ts` — 音声合成・音声認識の Promise ラッパー（中断対応）
 - `src/lib/sfx.ts` — 効果音

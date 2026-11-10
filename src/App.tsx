@@ -6,7 +6,7 @@ import { PRE2_CARDS } from './data/pre2Cards';
 import { GRADES, gradeOf } from './lib/grade';
 import { EXAMINERS } from './data/examiners';
 import { loadHistory, loadSettings, saveHistory, saveSettings } from './lib/settings';
-import { ServerStatus, canUseClaude, fetchStatus, generateReport, EvalResult } from './lib/api';
+import { ServerStatus, aiName, canUseAI, fetchStatus, generateReport, EvalResult } from './lib/api';
 import { setSfxEnabled, playSfx, unlockAudio } from './lib/sfx';
 import { AbortedError, speak, stopSpeaking, unlockSpeech } from './lib/speech';
 import { PASS_LINE, scoreAttitude } from './lib/scoring';
@@ -89,7 +89,8 @@ export default function App() {
   const abortRef = useRef<AbortController | null>(null);
 
   const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
-  const useClaude = canUseClaude(settings, status);
+  const useClaude = canUseAI(settings, status);
+  const ai = aiName(settings);
   const cards = CARDS_BY_GRADE[settings.grade] ?? EXAM_CARDS;
   // 面接中・結果画面は表示中カードの級、ホームは選択中の級
   const shownGrade = screen === 'home' ? GRADES[settings.grade] ?? GRADES['3'] : GRADES[gradeOf(card)];
@@ -260,7 +261,7 @@ export default function App() {
                 useClaude ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
               }`}
             >
-              <Sparkles className="h-3 w-3" /> {useClaude ? 'Claude 採点 ON' : '簡易採点'}
+              <Sparkles className="h-3 w-3" /> {useClaude ? `${ai} 採点 ON` : '簡易採点'}
             </span>
             <button onClick={() => setShowGuide(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
               <BookOpen className="h-4 w-4" /> <span className="hidden sm:inline">攻略ガイド</span>
@@ -286,7 +287,7 @@ export default function App() {
         {screen === 'home' && !useClaude && (
           <div className="mx-auto mb-4 flex w-full max-w-6xl flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <Sparkles className="h-4 w-4 shrink-0" />
-            <span className="flex-1">Claude APIキーを設定すると、あなたの発話に合わせた詳しいAI採点・講評になります（未設定でも簡易採点で練習可能）。</span>
+            <span className="flex-1">Claude または Gemini の APIキーを設定すると、あなたの発話に合わせた詳しいAI採点・講評になります（未設定でも簡易採点で練習可能）。</span>
             <button onClick={() => setShowSettings(true)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700">
               APIキーを設定
             </button>

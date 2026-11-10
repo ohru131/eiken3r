@@ -15,7 +15,11 @@ export const DEFAULT_EVAL_MODEL = 'claude-haiku-5-5';
 export const DEFAULT_REPORT_MODEL = 'claude-sonnet-5-5';
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  aiProvider: 'claude',
   apiKey: '',
+  geminiKey: '',
+  geminiEvalModel: 'gemini-flash-latest',
+  geminiReportModel: 'gemini-pro-latest',
   evalModel: DEFAULT_EVAL_MODEL,
   reportModel: DEFAULT_REPORT_MODEL,
   settingsVersion: SETTINGS_VERSION,

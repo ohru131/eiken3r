@@ -5,6 +5,7 @@ import { summarizeAssessment } from './azurePronunciation';
 import type Anthropic from '@anthropic-ai/sdk';
 
 const loadClaude = () => import('./claude');
+const loadGemini = () => import('./gemini');
 
 export interface ServerStatus {
   serverKey: boolean;
@@ -39,7 +40,12 @@ async function callClaude<T>(s: AppSettings, model: string, path: string, body: 
   return data as T;
 }
 
-export const canUseClaude = (s: AppSettings, status: ServerStatus) => !!s.apiKey || status.serverKey;
+/** AI 採点が使えるか（Gemini はブラウザのキーのみ。Claude はサーバーのキーも可） */
+export const canUseAI = (s: AppSettings, status: ServerStatus) =>
+  s.aiProvider === 'gemini' ? !!s.geminiKey : !!s.apiKey || status.serverKey;
+
+/** ヘッダー等に出す AI 名 */
+export const aiName = (s: AppSettings) => (s.aiProvider === 'gemini' ? 'Gemini' : 'Claude');
 
 export type EvalResult = StepFeedback & { error?: string };
 
@@ -67,6 +73,7 @@ export async function evaluateAnswer(
     pronunciationSummary: rec.pronunciation ? summarizeAssessment(rec.pronunciation) : undefined,
   };
   try {
+    if (settings.aiProvider === 'gemini') return await (await loadGemini()).evaluateWithGemini(settings.geminiKey, settings.geminiEvalModel, body);
     return await callClaude<StepFeedback>(settings, settings.evalModel, 'api/evaluate', body, (c, m) => m.evaluateWithClaude(c, settings.evalModel, body));
   } catch (e: any) {
     return { ...localEvaluate(card, rec), error: e?.message || 'network' };
@@ -102,6 +109,7 @@ export async function generateReport(
           latencySec: x.latencySec,
         })),
     };
+    if (settings.aiProvider === 'gemini') return await (await loadGemini()).reportWithGemini(settings.geminiKey, settings.geminiReportModel, body);
     return await callClaude(settings, settings.reportModel, 'api/report', body, (c, m) => m.reportWithClaude(c, settings.reportModel, body));
   } catch {
     return local();
@@ -116,7 +124,7 @@ function localReport(card: ExamCard, records: AnswerRecord[], scores: Record<Sco
     source: 'local' as const,
     summary: `お疲れさまでした。${good.length ? `${good.join('・')}はよくできています。` : ''}${
       weak.length ? `${weak.join('・')}は模範解答を声に出して練習しましょう。` : '全体的に安定しています。'
-    }（Claude APIキーを設定すると、あなたの発話に合わせた詳しい講評が表示されます）`,
+    }（Claude または Gemini の APIキーを設定すると、あなたの発話に合わせた詳しい講評が表示されます）`,
     strengths: good.length ? good.map((g) => `${g}で的確に答えられた`) : ['最後まで面接を受けきった'],
     improvements: weak.length ? weak.map((w) => (w === '音読' ? '音読: タイトルから最後まで、区切りを意識してはっきり読む' : `${w}: 主語＋動詞の完全な文で答える`)) : ['No.4・No.5で2文目を足して内容を広げる'],
     nextSteps: '間違えた設問を練習モードでもう一度。模範解答を3回音読してから本番モードに挑戦しましょう。',

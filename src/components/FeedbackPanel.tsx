@@ -211,7 +211,7 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; onS
       >
         {fb.verdict}
       </span>
-      <span className="text-[11px] text-slate-400">{fb.source === 'claude' ? 'Claude AI 採点' : '簡易採点（APIキー未設定）'}</span>
+      <span className="text-[11px] text-slate-400">{fb.source === 'claude' ? 'Claude AI 採点' : fb.source === 'gemini' ? 'Gemini AI 採点' : '簡易採点（APIキー未設定）'}</span>
       {fb.error && <span className="text-[11px] text-rose-500">※AI採点失敗: {fb.error}</span>}
     </div>
     <p className="text-slate-800">

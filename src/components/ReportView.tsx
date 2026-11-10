@@ -66,7 +66,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
           <Sparkles className="h-4 w-4 text-indigo-600" /> 総合講評
           {aiPending && (
             <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400">
-              <Loader2 className="h-3 w-3 animate-spin" /> Claude が講評を作成中…
+              <Loader2 className="h-3 w-3 animate-spin" /> AI が講評を作成中…
             </span>
           )}
         </div>
