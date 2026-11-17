@@ -6,6 +6,11 @@ const dayKey = (t: number) => {
   const d = new Date(t);
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 };
+/** カレンダー用の日付キー（ローカル時刻の YYYY-MM-DD） */
+export const dateKey = (t: number) => {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 const ts = (h: HistoryRecord) => Number(h.id) || 0;
 
 /** 連続練習日数（今日 or 昨日まで続いていれば継続中） */

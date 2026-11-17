@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Settings, Square, Subtitles, Languages, Volume2, VolumeX, Sparkles, Maximize, Minimize } from 'lucide-react';
+import { BookOpen, CalendarDays, Settings, Square, Subtitles, Languages, Volume2, VolumeX, Sparkles, Maximize, Minimize } from 'lucide-react';
 import { AnswerRecord, AppSettings, ExamCard, FinalReport, Grade, HistoryRecord, PhaseId, ScoredItem } from './types';
 import { EXAM_CARDS } from './data/examCards';
 import { PRE2_CARDS } from './data/pre2Cards';
@@ -19,13 +19,17 @@ import { MicBar } from './components/MicBar';
 import { FeedbackPanel } from './components/FeedbackPanel';
 import { ReportView } from './components/ReportView';
 import { Achievement, buildAchievements } from './components/ScoreHero';
-import { cardProgress, passedCardCount, practiceStreak } from './lib/stats';
+import { cardProgress, dateKey, passedCardCount, practiceStreak } from './lib/stats';
 import { SettingsModal } from './components/SettingsModal';
 import { StrategyGuideModal } from './components/StrategyGuideModal';
+import { HistoryScreen } from './components/HistoryScreen';
+import { SessionDetail, loadSessionDetail, saveSessionDetail } from './lib/sessionLog';
 
-type Screen = 'home' | 'interview' | 'report';
+type Screen = 'home' | 'interview' | 'report' | 'history' | 'review';
 
 const CARDS_BY_GRADE: Record<Grade, ExamCard[]> = { '3': EXAM_CARDS, pre2: PRE2_CARDS, '2': GRADE2_CARDS };
+const ALL_CARDS = [...EXAM_CARDS, ...PRE2_CARDS, ...GRADE2_CARDS];
+const findCard = (id: string) => ALL_CARDS.find((c) => c.id === id);
 
 type Step = { id: PhaseId[]; label: string };
 const STEPS_HEAD: Step[] = [
@@ -54,6 +58,9 @@ const STEPS_BY_GRADE: Record<Grade, Step[]> = (() => {
   ];
   return { '3': five, pre2: five, '2': four };
 })();
+/** クイック開始（あいさつ省略）では入室を出さず、最後は「採点」 */
+const quickSteps = (steps: Step[]): Step[] =>
+  steps.filter((s) => !s.id.includes('entrance')).map((s) => (s.id.includes('exit') ? { ...s, label: '採点' } : s));
 
 interface PendingFeedback {
   rec: AnswerRecord;
@@ -100,17 +107,26 @@ export default function App() {
   const [report, setReport] = useState<FinalReport | null>(null);
   const [aiPending, setAiPending] = useState(false);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [quickRun, setQuickRun] = useState(false);
+  // 記録の振り返り
+  const [review, setReview] = useState<{ detail: SessionDetail; card: ExamCard; date: string } | null>(null);
+  const [historyDay, setHistoryDay] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
   const useClaude = canUseAI(settings, status);
   const ai = aiName(settings);
   const cards = CARDS_BY_GRADE[settings.grade] ?? EXAM_CARDS;
-  const steps = STEPS_BY_GRADE[gradeOf(card)];
+  const steps = useMemo(() => (quickRun ? quickSteps(STEPS_BY_GRADE[gradeOf(card)]) : STEPS_BY_GRADE[gradeOf(card)]), [card, quickRun]);
   // 進行バー用: その級の段階を並べた順番（先頭 idle、末尾 report）
   const phaseOrder = useMemo<PhaseId[]>(() => ['idle', ...steps.flatMap((s) => s.id), 'report'], [steps]);
   // 面接中・結果画面は表示中カードの級、ホームは選択中の級
-  const shownGrade = screen === 'home' ? GRADES[settings.grade] ?? GRADES['3'] : GRADES[gradeOf(card)];
+  const shownGrade =
+    screen === 'review' && review
+      ? GRADES[gradeOf(review.card)]
+      : screen === 'home' || screen === 'history'
+        ? GRADES[settings.grade] ?? GRADES['3']
+        : GRADES[gradeOf(card)];
   const gradeHistory = useMemo(() => history.filter((h) => historyGrade(h) === settings.grade), [history, settings.grade]);
   // 本番モード: 字幕・ヒント・認識文字・黙読タイマーを出さない
   const examMode = settings.mode === 'exam';
@@ -161,6 +177,9 @@ export default function App() {
     unlockSpeech();
     resetLive();
     setCard(c);
+    setReview(null);
+    const quick = settings.mode === 'practice' && settings.quickStart;
+    setQuickRun(quick);
     setShowJa(settings.mode === 'practice');
     setScreen('interview');
     window.scrollTo({ top: 0 });
@@ -233,14 +252,28 @@ export default function App() {
         total,
         passed,
         grade: gradeOf(c),
+        ...(quick ? { quick: true } : {}),
       };
-      const nextHistory = [h, ...history];
+      // 振り返り用の詳細（容量不足なら古い詳細から削除される）
+      // 講評の生成前に画面を離れた場合に備え、仮の文言ではなく「未保存」と残す
+      const detail: SessionDetail = {
+        id: h.id,
+        cardId: c.id,
+        grade: gradeOf(c),
+        mode: settings.mode,
+        quick: quick || undefined,
+        records: recs,
+        report: { ...base, summary: '（総合講評の作成前に画面を移動したため、講評は保存されていません）' },
+      };
+      // 別タブで増えた記録を消さないよう、保存済みの一覧を読み直して先頭に追加
+      const nextHistory = [h, ...loadHistory().filter((x) => x.id !== h.id)];
       const sameGrade = nextHistory.filter((x) => historyGrade(x) === gradeOf(c));
       setAchievements(
         buildAchievements(c, base, cardProgress(history, c.id), practiceStreak(nextHistory), passedCardCount(sameGrade), CARDS_BY_GRADE[gradeOf(c)].length)
       );
-      setHistory(nextHistory);
-      saveHistory(nextHistory);
+      setHistory(saveHistory(nextHistory));
+      saveSessionDetail(detail);
+      setHistoryDay(null); // 次に記録を開いたときは最新の日を表示
       setReport(base);
       setRecords(recs);
       setPhase('report');
@@ -248,8 +281,11 @@ export default function App() {
 
       setAiPending(useClaude);
       const text = await generateReport(c, recs, scores, attitude, total, PASS_LINE, settings, useClaude);
+      const full = { ...base, ...text };
+      // 画面を離れていても、記録には完成した講評を残す
+      saveSessionDetail({ ...detail, report: full });
       if (ac.signal.aborted) return;
-      setReport({ ...base, ...text });
+      setReport(full);
       setAiPending(false);
     } catch (e) {
       if (!(e instanceof AbortedError)) console.error(e);
@@ -263,6 +299,27 @@ export default function App() {
   };
 
   const phaseIdx = phaseOrder.indexOf(phase);
+
+  const openHistory = () => {
+    stopInterview();
+    resetLive();
+    setReview(null);
+    // 初回は最後に練習した日を選んでおく
+    setHistoryDay((d) => d ?? (history[0] ? dateKey(Number(history[0].id) || 0) : null));
+    setScreen('history');
+    window.scrollTo({ top: 0 });
+  };
+
+  /** 記録の詳細を開く。カードが見つからない・詳細が削除済みなら false */
+  const openReview = (h: HistoryRecord) => {
+    const detail = loadSessionDetail(h.id);
+    const c = findCard(h.cardId);
+    if (!detail || !c) return false;
+    setReview({ detail, card: c, date: h.date });
+    setScreen('review');
+    window.scrollTo({ top: 0 });
+    return true;
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-100 text-slate-900">
@@ -283,6 +340,12 @@ export default function App() {
             >
               <Sparkles className="h-3 w-3" /> {useClaude ? `${ai} 採点 ON` : '簡易採点'}
             </span>
+            <button
+              onClick={openHistory}
+              className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold hover:bg-indigo-50 ${screen === 'history' || screen === 'review' ? 'bg-indigo-50 text-indigo-700' : 'text-indigo-700'}`}
+            >
+              <CalendarDays className="h-4 w-4" /> <span className="hidden sm:inline">記録</span>
+            </button>
             <button onClick={() => setShowGuide(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
               <BookOpen className="h-4 w-4" /> <span className="hidden sm:inline">攻略ガイド</span>
             </button>
@@ -313,7 +376,32 @@ export default function App() {
             </button>
           </div>
         )}
-        {screen === 'home' && <HomeScreen cards={cards} settings={settings} history={gradeHistory} allHistory={history} onSettings={setSettings} onStart={start} />}
+        {screen === 'home' && <HomeScreen cards={cards} settings={settings} history={gradeHistory} allHistory={history} onSettings={setSettings} onStart={start} onOpenHistory={openHistory} />}
+
+        {screen === 'history' && (
+          <HistoryScreen history={history} day={historyDay} onDayChange={setHistoryDay} onOpen={openReview} onBack={goHome} cardExists={(id) => !!findCard(id)} />
+        )}
+
+        {screen === 'review' && review && (
+          <ReportView
+            key={review.detail.id}
+            card={review.card}
+            records={review.detail.records}
+            report={review.detail.report}
+            aiPending={false}
+            onSpeak={speakModel}
+            onRetry={() => start(review.card)}
+            onNext={() => {}}
+            onHome={openHistory}
+            achievements={[]}
+            review={{
+              date: review.date,
+              mode: review.detail.mode,
+              quick: !!review.detail.quick,
+              retryLabel: `このカードでもう一度（${settings.mode === 'exam' ? '本番モード' : settings.quickStart ? 'クイック練習' : '練習モード'}）`,
+            }}
+          />
+        )}
 
         {screen === 'report' && (
           <ReportView
@@ -334,7 +422,7 @@ export default function App() {
             {/* progress */}
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
               <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
-                {settings.mode === 'exam' ? '本番' : '練習'}
+                {settings.mode === 'exam' ? '本番' : quickRun ? 'クイック練習' : '練習'}
               </span>
               <div className="flex flex-1 items-center gap-1 overflow-x-auto">
                 {steps.map((s, i) => {

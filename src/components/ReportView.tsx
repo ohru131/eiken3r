@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Award, RotateCcw, Home, ChevronDown, Loader2, Sparkles, ArrowRight } from 'lucide-react';
-import { AnswerRecord, ExamCard, FinalReport, ScoredItem } from '../types';
+import { Award, RotateCcw, Home, ChevronDown, Loader2, Sparkles, ArrowRight, CalendarDays, ArrowLeft } from 'lucide-react';
+import { AnswerRecord, ExamCard, FinalReport, InterviewMode, ScoredItem } from '../types';
 import { getQuestion, hasFollowUp, itemLabel, maxScore, sceneFor, scoreOutOf5, scoredItems, storyFor } from '../lib/grade';
 import { FeedbackBody, ScoreDots } from './FeedbackPanel';
 import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
@@ -18,9 +18,11 @@ interface Props {
   onNext: () => void;
   onHome: () => void;
   achievements: Achievement[];
+  /** 過去の記録を振り返るとき（演出なし・ボタンを差し替え） */
+  review?: { date: string; mode: InterviewMode; quick: boolean; retryLabel: string };
 }
 
-export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, onSpeak, onRetry, onNext, onHome, achievements }) => {
+export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, onSpeak, onRetry, onNext, onHome, achievements, review }) => {
   const ORDER = scoredItems(card);
   const [open, setOpen] = useState<Set<ScoredItem>>(new Set());
   const initialized = useRef(false);
@@ -48,7 +50,19 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
   }
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4 pb-10">
-      <ScoreHero card={card} report={report} achievements={achievements} />
+      {review && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-900">
+          <button onClick={onHome} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-100">
+            <ArrowLeft className="h-3.5 w-3.5" /> 記録に戻る
+          </button>
+          <CalendarDays className="h-4 w-4" />
+          <span className="font-bold">{review.date} の記録</span>
+          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-indigo-700">
+            {review.mode === 'exam' ? '本番モード' : review.quick ? 'クイック練習' : '練習モード'}
+          </span>
+        </div>
+      )}
+      <ScoreHero card={card} report={report} achievements={achievements} quiet={!!review} />
 
       <div className="flex justify-center">
         <button
@@ -215,6 +229,16 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
         })}
       </div>
 
+      {review ? (
+        <div className="flex flex-wrap justify-center gap-2 pt-2">
+          <button onClick={onHome} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
+            <ArrowLeft className="h-4 w-4" /> 記録に戻る
+          </button>
+          <button onClick={onRetry} className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
+            <RotateCcw className="h-4 w-4" /> {review.retryLabel}
+          </button>
+        </div>
+      ) : (
       <div className="flex flex-wrap justify-center gap-2 pt-2">
         <button onClick={onRetry} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
           <RotateCcw className="h-4 w-4" /> 同じカードでもう一度
@@ -226,6 +250,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
           <Home className="h-4 w-4" /> カード一覧
         </button>
       </div>
+      )}
       <div className="flex justify-center">
         <Award className="h-5 w-5 text-slate-300" />
       </div>

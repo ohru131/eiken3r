@@ -49,6 +49,8 @@ export async function runInterview(
   signal: AbortSignal
 ): Promise<InterviewResult> {
   const practice = settings.mode === 'practice';
+  // 練習モードのクイック開始: 入室・あいさつ・退室を省いて、カードの黙読から始める
+  const quick = practice && settings.quickStart;
   const grade = gradeInfo(card);
   const pre2 = grade.id === 'pre2';
   const g2 = grade.id === '2';
@@ -254,29 +256,35 @@ export async function runInterview(
   };
 
   {
-    // ---- 入室 ----
-    bridge.setPhase('entrance');
-    bridge.setCardState('none');
-    playSfx('knock');
-    await sleep(1300, signal);
-    playSfx('door');
-    await sleep(700, signal);
-    await smallTalk('Hello.', '挨拶しましょう (Hello.)', 'こんにちは。');
-    await smallTalk('Can I have your card, please?', '面接カードを渡しましょう (Here you are.)', '（面接）カードをいただけますか？');
-    await smallTalk('Thank you. Please sit down.', 'お礼を言って着席 (Thank you.)', 'ありがとう。お座りください。');
+    if (quick) {
+      bridge.setCardState('none');
+      bridge.setPhase('silent_reading');
+      await say("Let's start. Here is your card.", 'では始めましょう。こちらがカードです。');
+    } else {
+      // ---- 入室 ----
+      bridge.setPhase('entrance');
+      bridge.setCardState('none');
+      playSfx('knock');
+      await sleep(1300, signal);
+      playSfx('door');
+      await sleep(700, signal);
+      await smallTalk('Hello.', '挨拶しましょう (Hello.)', 'こんにちは。');
+      await smallTalk('Can I have your card, please?', '面接カードを渡しましょう (Here you are.)', '（面接）カードをいただけますか？');
+      await smallTalk('Thank you. Please sit down.', 'お礼を言って着席 (Thank you.)', 'ありがとう。お座りください。');
 
-    // ---- 名前・挨拶 ----
-    bridge.setPhase('greeting');
-    const nameRes = await smallTalk(
-      `My name is ${examiner.name}. May I have your name, please?`,
-      '名前を答えましょう (My name is ...)',
-      `私は${examiner.name}です。お名前を教えてください。`
-    );
-    const m = nameRes.text.match(/(?:my name is|i am|i'm)\s+([a-z]+)/i);
-    candidateName = m ? m[1][0].toUpperCase() + m[1].slice(1) : '';
-    await smallTalk(`This is the ${grade.spoken} test. OK?`, '返事をしましょう (OK. / Yes.)', `これは${grade.spokenJa}のテストです。いいですか？`);
-    await smallTalk('How are you?', '答えましょう (I\'m fine, thank you.)', '調子はどうですか？');
-    await say("Good. Let's start the test. Here is your card.", 'では、テストを始めましょう。こちらがカードです。');
+      // ---- 名前・挨拶 ----
+      bridge.setPhase('greeting');
+      const nameRes = await smallTalk(
+        `My name is ${examiner.name}. May I have your name, please?`,
+        '名前を答えましょう (My name is ...)',
+        `私は${examiner.name}です。お名前を教えてください。`
+      );
+      const m = nameRes.text.match(/(?:my name is|i am|i'm)\s+([a-z]+)/i);
+      candidateName = m ? m[1][0].toUpperCase() + m[1].slice(1) : '';
+      await smallTalk(`This is the ${grade.spoken} test. OK?`, '返事をしましょう (OK. / Yes.)', `これは${grade.spokenJa}のテストです。いいですか？`);
+      await smallTalk('How are you?', '答えましょう (I\'m fine, thank you.)', '調子はどうですか？');
+      await say("Good. Let's start the test. Here is your card.", 'では、テストを始めましょう。こちらがカードです。');
+    }
 
     // ---- 黙読 ----
     playSfx('flip');
@@ -354,15 +362,21 @@ export async function runInterview(
 
     // ---- 退室 ----
     bridge.setPhase('exit');
-    await smallTalk(
-      'All right. This is the end of the test. Could I have the card back, please?',
-      'カードを返しましょう (Here you are.)',
-      'これでテストは終わりです。カードを返してください。'
-    );
-    bridge.setCardState('none');
-    await smallTalk('Thank you. You may go now.', 'お礼と挨拶 (Thank you. Goodbye.)', 'ありがとう。退室して結構です。');
-    playSfx('door');
-    bridge.setLine(null);
+    if (quick) {
+      bridge.setCardState('none');
+      await say('That is all. Good job!', 'これで終わりです。おつかれさまでした！');
+      bridge.setLine(null);
+    } else {
+      await smallTalk(
+        'All right. This is the end of the test. Could I have the card back, please?',
+        'カードを返しましょう (Here you are.)',
+        'これでテストは終わりです。カードを返してください。'
+      );
+      bridge.setCardState('none');
+      await smallTalk('Thank you. You may go now.', 'お礼と挨拶 (Thank you. Goodbye.)', 'ありがとう。退室して結構です。');
+      playSfx('door');
+      bridge.setLine(null);
+    }
   }
 
   return {
