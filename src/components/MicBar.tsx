@@ -31,6 +31,9 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!listening || typing) return;
+      // 設定画面や入力欄を操作中は回答終了にしない
+      const el = e.target as HTMLElement | null;
+      if (el?.closest?.('input, textarea, select') || document.querySelector('[aria-modal="true"]')) return;
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
         getActiveListen()?.finish();
@@ -88,7 +91,12 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
             {listening ? (exam ? '🎤 どうぞ、英語で話してください' : `🎤 ${hint}`) : speaking ? '面接官が話しています…' : busyLabel || '待機中'}
           </div>
           <div className="mt-0.5 min-h-[1.75rem] text-base font-semibold text-slate-900 sm:text-lg">
-            {listening && !typing && (interim || <span className="text-slate-400">（話し始めると文字が表示されます）</span>)}
+            {/* スマホでは下に固定するので、長い認識文字は末尾の2行だけ見せてカードを隠さない */}
+            {listening && !typing && (
+              <div className="flex max-h-[3.25rem] flex-col justify-end overflow-hidden lg:max-h-none">
+                <div>{interim || <span className="text-sm text-slate-400 sm:text-base">（話し始めると文字が表示されます）</span>}</div>
+              </div>
+            )}
             {listening && typing && (
               <form
                 className="flex gap-2"
@@ -120,7 +128,7 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
               onClick={() => getActiveListen()?.finish()}
               className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1.5 font-bold text-white hover:bg-rose-700"
             >
-              <Check className="h-3.5 w-3.5" /> 回答終了 <kbd className="ml-1 rounded bg-white/20 px-1 text-[11px]">Space</kbd>
+              <Check className="h-3.5 w-3.5" /> 回答終了 <kbd className="ml-1 hidden rounded bg-white/20 px-1 text-[11px] lg:inline">Space</kbd>
             </button>
           )}
           <button
@@ -140,7 +148,7 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
               <Keyboard className="h-3.5 w-3.5" /> {typing ? '音声で答える' : 'キーボード入力'}
             </button>
           )}
-          {!typing && <span className="w-full text-[12px] text-slate-500">話し終えて少し黙ると自動で次に進みます</span>}
+          {!typing && <span className="hidden w-full text-[12px] text-slate-500 lg:block">話し終えて少し黙ると自動で次に進みます</span>}
         </div>
       )}
     </div>

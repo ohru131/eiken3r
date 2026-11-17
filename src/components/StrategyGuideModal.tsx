@@ -1,6 +1,7 @@
 import React from 'react';
 import { Grade } from '../types';
 import { GRADES } from '../lib/grade';
+import { useModal } from '../lib/useModal';
 import { X, BookOpen, CheckCircle, HelpCircle, Award, Volume2, Sparkles } from 'lucide-react';
 
 interface StrategyGuideModalProps {
@@ -105,12 +106,19 @@ const SCORING: Record<Grade, string> = {
 };
 
 export const StrategyGuideModal: React.FC<StrategyGuideModalProps> = ({ isOpen, grade = '3', onClose }) => {
+  useModal(isOpen, onClose);
   if (!isOpen) return null;
   const steps = grade === 'pre2' ? PRE2_STEPS : grade === '2' ? G2_STEPS : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="攻略ガイド"
+        className="bg-white rounded-3xl max-w-2xl w-full max-h-[90dvh] overflow-y-auto shadow-2xl border border-slate-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
@@ -128,6 +136,7 @@ export const StrategyGuideModal: React.FC<StrategyGuideModalProps> = ({ isOpen, 
           </div>
           <button
             onClick={onClose}
+            aria-label="攻略ガイドを閉じる"
             className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
           >
             <X className="w-5 h-5" />
