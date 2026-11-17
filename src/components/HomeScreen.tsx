@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { practiceStreak, practicedToday, recentAverage, weekCount } from '../lib/stats';
-import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame } from 'lucide-react';
+import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame, Zap, CalendarDays } from 'lucide-react';
 import { AppSettings, ExamCard, Grade, HistoryRecord, InterviewMode } from '../types';
 import { GRADES, GRADE_ORDER } from '../lib/grade';
 import { EXAMINERS } from '../data/examiners';
@@ -16,6 +16,7 @@ interface Props {
   allHistory: HistoryRecord[];
   onSettings: (s: AppSettings) => void;
   onStart: (card: ExamCard) => void;
+  onOpenHistory: () => void;
 }
 
 const ProgressPanel: React.FC<{ history: HistoryRecord[]; allHistory: HistoryRecord[]; total: number; passed: number }> = ({ history, allHistory, total, passed }) => {
@@ -88,7 +89,7 @@ const STATUS_CARD: Record<Status, string> = {
   passed: 'border-emerald-300 bg-emerald-50/40',
 };
 
-export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHistory, onSettings, onStart }) => {
+export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHistory, onSettings, onStart, onOpenHistory }) => {
   const [level, setLevel] = useState<'all' | ExamCard['level']>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | Status>('all');
   const best = useMemo(() => {
@@ -191,6 +192,22 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
               desc="1問ごとに採点・解説・模範解答。やり直しもOK"
             />
           </div>
+          {settings.mode === 'practice' && (
+            <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-2.5">
+              <input
+                type="checkbox"
+                checked={settings.quickStart}
+                onChange={(e) => onSettings({ ...settings, quickStart: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-emerald-600"
+              />
+              <span>
+                <span className="flex items-center gap-1 text-sm font-black text-emerald-900">
+                  <Zap className="h-4 w-4" /> クイック開始（あいさつを省略）
+                </span>
+                <span className="block text-[12px] leading-snug text-emerald-800">入室・名前・あいさつ・退室を飛ばし、いきなりカード（黙読→音読→質問）から練習</span>
+              </span>
+            </label>
+          )}
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-2 text-sm font-black text-slate-900">面接官</div>
@@ -300,7 +317,15 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
 
       {history.length > 0 && (
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-2 text-sm font-black text-slate-900">最近の結果</div>
+          <div className="mb-2 flex items-center gap-2">
+            <div className="text-sm font-black text-slate-900">最近の結果</div>
+            <button
+              onClick={onOpenHistory}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+            >
+              <CalendarDays className="h-3.5 w-3.5" /> カレンダーで振り返る
+            </button>
+          </div>
           <div className="flex items-end gap-1.5 overflow-x-auto pb-1">
             {history
               .slice(0, 20)

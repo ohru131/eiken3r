@@ -55,12 +55,13 @@ const TONE = {
   blue: 'border-sky-300/40 bg-sky-400/15 text-sky-200',
 };
 
-export const ScoreHero: React.FC<{ card: ExamCard; report: FinalReport; achievements: Achievement[] }> = ({ card, report, achievements }) => {
+export const ScoreHero: React.FC<{ card: ExamCard; report: FinalReport; achievements: Achievement[]; quiet?: boolean }> = ({ card, report, achievements, quiet }) => {
   const shown = useCountUp(report.total);
   const pct = shown / 33;
   const newBest = achievements.some((x) => x.tone === 'gold' && x.text.startsWith('自己ベスト'));
 
   useEffect(() => {
+    if (quiet) return; // 過去の記録の振り返りでは演出しない
     const t = setTimeout(() => {
       if (report.passed) {
         celebratePass();

@@ -225,6 +225,8 @@ export interface HistoryRecord {
   total: number;
   passed: boolean;
   grade?: Grade;
+  /** 練習モードの「あいさつを省略」で行った回 */
+  quick?: boolean;
 }
 
 /** 採点したAI（local = APIキーなしの簡易採点） */
@@ -257,6 +259,8 @@ export interface AppSettings {
   speechRate: number; // 0.7 - 1.2
   sfx: boolean;
   autoAdvance: boolean;
+  /** 練習モード: 入室・あいさつ・退室を省き、いきなりカードから始める */
+  quickStart: boolean;
   /** 回答終了とみなす無音秒数 */
   silenceSec: number;
   /** 練習モードで模範解答を読み上げる */

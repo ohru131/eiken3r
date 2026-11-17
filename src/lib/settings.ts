@@ -1,5 +1,6 @@
 import { AppSettings, HistoryRecord } from '../types';
 import { GRADES } from './grade';
+import { pruneOrphanDetails, setItemWithEviction } from './sessionLog';
 
 const KEY = 'eiken3_settings_v2';
 const HISTORY_KEY = 'eiken3_history_v2';
@@ -30,6 +31,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   speechRate: 1,
   sfx: true,
   autoAdvance: true,
+  quickStart: false,
   silenceSec: 2.2,
   readModelAnswer: true,
   listenModelFirst: true,
@@ -76,10 +78,12 @@ export function loadHistory(): HistoryRecord[] {
   }
 }
 
+/** 一覧（点数などの概要）は小さいので多めに残す。詳細は sessionLog 側で容量に応じて古い順に削除 */
+const HISTORY_MAX = 2000;
+
 export function saveHistory(h: HistoryRecord[]) {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 100)));
-  } catch {
-    /* noop */
-  }
+  let list = h.slice(0, HISTORY_MAX);
+  // 詳細を消しても入らなければ、一覧の古い記録を減らして再試行
+  while (list.length && !setItemWithEviction(HISTORY_KEY, JSON.stringify(list))) list = list.slice(0, Math.floor(list.length * 0.8));
+  pruneOrphanDetails(new Set(list.map((x) => x.id)));
 }
