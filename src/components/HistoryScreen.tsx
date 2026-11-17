@@ -4,7 +4,7 @@ import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Database, Eye, Flam
 import { Grade, HistoryRecord } from '../types';
 import { GRADES, GRADE_ORDER, historyGrade } from '../lib/grade';
 import { listDetailIds, storageUsage } from '../lib/sessionLog';
-import { practiceStreak } from '../lib/stats';
+import { dateKey as dayKey, practiceStreak } from '../lib/stats';
 import { PASS_LINE } from '../lib/scoring';
 
 interface Props {
@@ -21,10 +21,6 @@ interface Props {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const tsOf = (h: HistoryRecord) => Number(h.id) || 0;
-export const dayKey = (t: number) => {
-  const d = new Date(t);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
 const monthKey = (t: number) => dayKey(t).slice(0, 7);
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 

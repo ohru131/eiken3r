@@ -19,10 +19,10 @@ import { MicBar } from './components/MicBar';
 import { FeedbackPanel } from './components/FeedbackPanel';
 import { ReportView } from './components/ReportView';
 import { Achievement, buildAchievements } from './components/ScoreHero';
-import { cardProgress, passedCardCount, practiceStreak } from './lib/stats';
+import { cardProgress, dateKey, passedCardCount, practiceStreak } from './lib/stats';
 import { SettingsModal } from './components/SettingsModal';
 import { StrategyGuideModal } from './components/StrategyGuideModal';
-import { HistoryScreen, dayKey } from './components/HistoryScreen';
+import { HistoryScreen } from './components/HistoryScreen';
 import { SessionDetail, loadSessionDetail, saveSessionDetail } from './lib/sessionLog';
 
 type Screen = 'home' | 'interview' | 'report' | 'history' | 'review';
@@ -255,15 +255,25 @@ export default function App() {
         ...(quick ? { quick: true } : {}),
       };
       // 振り返り用の詳細（容量不足なら古い詳細から削除される）
-      const detail: SessionDetail = { id: h.id, cardId: c.id, grade: gradeOf(c), mode: settings.mode, quick: quick || undefined, records: recs, report: base };
-      const nextHistory = [h, ...history];
+      // 講評の生成前に画面を離れた場合に備え、仮の文言ではなく「未保存」と残す
+      const detail: SessionDetail = {
+        id: h.id,
+        cardId: c.id,
+        grade: gradeOf(c),
+        mode: settings.mode,
+        quick: quick || undefined,
+        records: recs,
+        report: { ...base, summary: '（総合講評の作成前に画面を移動したため、講評は保存されていません）' },
+      };
+      // 別タブで増えた記録を消さないよう、保存済みの一覧を読み直して先頭に追加
+      const nextHistory = [h, ...loadHistory().filter((x) => x.id !== h.id)];
       const sameGrade = nextHistory.filter((x) => historyGrade(x) === gradeOf(c));
       setAchievements(
         buildAchievements(c, base, cardProgress(history, c.id), practiceStreak(nextHistory), passedCardCount(sameGrade), CARDS_BY_GRADE[gradeOf(c)].length)
       );
-      setHistory(nextHistory);
-      saveHistory(nextHistory);
+      setHistory(saveHistory(nextHistory));
       saveSessionDetail(detail);
+      setHistoryDay(null); // 次に記録を開いたときは最新の日を表示
       setReport(base);
       setRecords(recs);
       setPhase('report');
@@ -271,11 +281,12 @@ export default function App() {
 
       setAiPending(useClaude);
       const text = await generateReport(c, recs, scores, attitude, total, PASS_LINE, settings, useClaude);
-      if (ac.signal.aborted) return;
       const full = { ...base, ...text };
+      // 画面を離れていても、記録には完成した講評を残す
+      saveSessionDetail({ ...detail, report: full });
+      if (ac.signal.aborted) return;
       setReport(full);
       setAiPending(false);
-      saveSessionDetail({ ...detail, report: full });
     } catch (e) {
       if (!(e instanceof AbortedError)) console.error(e);
     }
@@ -294,7 +305,7 @@ export default function App() {
     resetLive();
     setReview(null);
     // 初回は最後に練習した日を選んでおく
-    setHistoryDay((d) => d ?? (history[0] ? dayKey(Number(history[0].id) || 0) : null));
+    setHistoryDay((d) => d ?? (history[0] ? dateKey(Number(history[0].id) || 0) : null));
     setScreen('history');
     window.scrollTo({ top: 0 });
   };
@@ -383,7 +394,12 @@ export default function App() {
             onNext={() => {}}
             onHome={openHistory}
             achievements={[]}
-            review={{ date: review.date, mode: review.detail.mode, quick: !!review.detail.quick }}
+            review={{
+              date: review.date,
+              mode: review.detail.mode,
+              quick: !!review.detail.quick,
+              retryLabel: `このカードでもう一度（${settings.mode === 'exam' ? '本番モード' : settings.quickStart ? 'クイック練習' : '練習モード'}）`,
+            }}
           />
         )}
 

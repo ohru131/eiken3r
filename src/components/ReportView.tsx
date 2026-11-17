@@ -19,7 +19,7 @@ interface Props {
   onHome: () => void;
   achievements: Achievement[];
   /** 過去の記録を振り返るとき（演出なし・ボタンを差し替え） */
-  review?: { date: string; mode: InterviewMode; quick: boolean };
+  review?: { date: string; mode: InterviewMode; quick: boolean; retryLabel: string };
 }
 
 export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, onSpeak, onRetry, onNext, onHome, achievements, review }) => {
@@ -235,7 +235,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
             <ArrowLeft className="h-4 w-4" /> 記録に戻る
           </button>
           <button onClick={onRetry} className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
-            <RotateCcw className="h-4 w-4" /> このカードでもう一度練習
+            <RotateCcw className="h-4 w-4" /> {review.retryLabel}
           </button>
         </div>
       ) : (

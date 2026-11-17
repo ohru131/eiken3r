@@ -18,6 +18,12 @@ export interface SessionDetail {
 
 const keyOf = (id: string) => PREFIX + id;
 
+/** 容量不足の例外か（Chrome/Safari: QuotaExceededError・22、Firefox: NS_ERROR_DOM_QUOTA_REACHED・1014） */
+function isQuotaError(e: unknown): boolean {
+  if (!(e instanceof DOMException)) return false;
+  return e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014;
+}
+
 /** 保存済みの詳細 ID（古い順） */
 export function listDetailIds(): string[] {
   const ids: string[] = [];
@@ -55,13 +61,16 @@ export function deleteSessionDetail(id: string) {
  * 書き込めたら true。
  */
 export function setItemWithEviction(key: string, value: string, keep: string[] = []): boolean {
+  const tried = new Set(keep);
   for (;;) {
     try {
       localStorage.setItem(key, value);
       return true;
-    } catch {
-      const victim = listDetailIds().find((id) => !keep.includes(id) && keyOf(id) !== key);
+    } catch (e) {
+      if (!isQuotaError(e)) return false; // 容量以外の失敗（プライベートモード等）では記録を消さない
+      const victim = listDetailIds().find((id) => !tried.has(id) && keyOf(id) !== key);
       if (!victim) return false;
+      tried.add(victim);
       console.info(`保存容量が不足したため、古い練習記録（${new Date(Number(victim)).toLocaleString('ja-JP')}）の詳細を削除`);
       deleteSessionDetail(victim);
     }

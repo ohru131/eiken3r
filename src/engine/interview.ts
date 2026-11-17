@@ -258,6 +258,7 @@ export async function runInterview(
   {
     if (quick) {
       bridge.setCardState('none');
+      bridge.setPhase('silent_reading');
       await say("Let's start. Here is your card.", 'では始めましょう。こちらがカードです。');
     } else {
       // ---- 入室 ----
