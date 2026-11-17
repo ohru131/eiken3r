@@ -31,6 +31,9 @@ export const MicBar: React.FC<Props> = ({ speaking, listening, hint, interim, si
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!listening || typing) return;
+      // 設定画面や入力欄を操作中は回答終了にしない
+      const el = e.target as HTMLElement | null;
+      if (el?.closest?.('input, textarea, select, [role="dialog"], [role="alertdialog"]')) return;
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
         getActiveListen()?.finish();

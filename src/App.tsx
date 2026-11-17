@@ -24,6 +24,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { StrategyGuideModal } from './components/StrategyGuideModal';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SessionDetail, loadSessionDetail, saveSessionDetail } from './lib/sessionLog';
+import { useModal } from './lib/useModal';
 
 type Screen = 'home' | 'interview' | 'report' | 'history' | 'review';
 
@@ -112,6 +113,10 @@ export default function App() {
   const [review, setReview] = useState<{ detail: SessionDetail; card: ExamCard; date: string } | null>(null);
   const [historyDay, setHistoryDay] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // 面接の途中で画面を離れる操作の確認（null なら非表示）
+  const [leave, setLeave] = useState<{ run: () => void } | null>(null);
+  const cardPaneRef = useRef<HTMLDivElement>(null);
+  const stepsRef = useRef<HTMLDivElement>(null);
 
   const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
   const useClaude = canUseAI(settings, status);
@@ -292,6 +297,35 @@ export default function App() {
     }
   };
 
+  /** 面接の途中なら確認してから実行（記録が残らないため） */
+  const guardLeave = (run: () => void) => {
+    if (screen === 'interview' && phase !== 'idle') setLeave({ run });
+    else run();
+  };
+  const closeLeave = useCallback(() => setLeave(null), []);
+  useModal(!!leave, closeLeave);
+  // 確認中に面接が終わったら、確認は閉じる
+  useEffect(() => {
+    if (screen !== 'interview') setLeave(null);
+  }, [screen]);
+
+  // スマホ: カードが渡されたとき・解説が出たときに、その位置まで自動でスクロール
+  const hasPending = !!pending;
+  useEffect(() => {
+    if (screen !== 'interview' || window.innerWidth >= 1024) return;
+    if (cardState === 'none' && !hasPending) return;
+    cardPaneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [screen, cardState, hasPending]);
+  // 進行バー: 現在の段階が見える位置まで横スクロール
+  useEffect(() => {
+    const box = stepsRef.current;
+    const el = box?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (!box || !el) return;
+    const b = box.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    box.scrollTo({ left: box.scrollLeft + r.left - b.left - (b.width - r.width) / 2, behavior: 'smooth' });
+  }, [phase]);
+
   const nextCard = () => {
     const list = CARDS_BY_GRADE[gradeOf(card)];
     const i = list.findIndex((c) => c.id === card.id);
@@ -325,14 +359,16 @@ export default function App() {
     <div className="flex min-h-screen flex-col bg-slate-100 text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
-          <button onClick={goHome} className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-black text-white">{shownGrade.badge}</div>
-            <div className="text-left">
-              <div className="text-sm font-black leading-tight sm:text-base">英検{shownGrade.label} 面接シミュレーター</div>
+          <button onClick={() => guardLeave(goHome)} aria-label="ホームへ戻る" className="flex min-w-0 items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-black text-white">{shownGrade.badge}</div>
+            <div className="min-w-0 text-left">
+              <div className="truncate text-sm font-black leading-tight sm:text-base">
+                英検{shownGrade.label} 面接<span className="hidden min-[420px]:inline">シミュレーター</span>
+              </div>
               <div className="hidden text-[11px] text-slate-500 sm:block">2次試験（スピーキング）本番形式トレーニング</div>
             </div>
           </button>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <span
               className={`hidden items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold sm:inline-flex ${
                 useClaude ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -341,15 +377,16 @@ export default function App() {
               <Sparkles className="h-3 w-3" /> {useClaude ? `${ai} 採点 ON` : '簡易採点'}
             </span>
             <button
-              onClick={openHistory}
+              onClick={() => guardLeave(openHistory)}
+              aria-label="練習の記録"
               className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold hover:bg-indigo-50 ${screen === 'history' || screen === 'review' ? 'bg-indigo-50 text-indigo-700' : 'text-indigo-700'}`}
             >
               <CalendarDays className="h-4 w-4" /> <span className="hidden sm:inline">記録</span>
             </button>
-            <button onClick={() => setShowGuide(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
+            <button onClick={() => setShowGuide(true)} aria-label="攻略ガイド" className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
               <BookOpen className="h-4 w-4" /> <span className="hidden sm:inline">攻略ガイド</span>
             </button>
-            <button onClick={() => setShowSettings(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">
+            <button onClick={() => setShowSettings(true)} aria-label="設定" className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">
               <Settings className="h-4 w-4" /> <span className="hidden sm:inline">設定</span>
             </button>
             {canFullscreen && (
@@ -368,10 +405,13 @@ export default function App() {
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col p-3 sm:p-5">
         {screen === 'home' && !useClaude && (
-          <div className="mx-auto mb-4 flex w-full max-w-6xl flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mx-auto mb-4 flex w-full max-w-6xl items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900 sm:px-4 sm:py-3 sm:text-sm">
             <Sparkles className="h-4 w-4 shrink-0" />
-            <span className="flex-1">Claude または Gemini の APIキーを設定すると、あなたの発話に合わせた詳しいAI採点・講評になります（未設定でも簡易採点で練習可能）。</span>
-            <button onClick={() => setShowSettings(true)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700">
+            <span className="flex-1">
+              <span className="sm:hidden">いまは簡易採点。APIキーを設定するとAIが詳しく採点・講評。</span>
+              <span className="hidden sm:inline">Claude または Gemini の APIキーを設定すると、あなたの発話に合わせた詳しいAI採点・講評になります（未設定でも簡易採点で練習可能）。</span>
+            </span>
+            <button onClick={() => setShowSettings(true)} className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700">
               APIキーを設定
             </button>
           </div>
@@ -418,13 +458,13 @@ export default function App() {
         )}
 
         {screen === 'interview' && (
-          <div className="flex flex-1 flex-col gap-3 lg:h-[calc(100dvh-3.5rem-2.75rem)] lg:min-h-0 lg:flex-none">
+          <div className="flex flex-1 flex-col gap-3 pb-44 lg:h-[calc(100dvh-3.5rem-2.75rem)] lg:min-h-0 lg:flex-none lg:pb-0">
             {/* progress */}
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
               <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
                 {settings.mode === 'exam' ? '本番' : quickRun ? 'クイック練習' : '練習'}
               </span>
-              <div className="flex flex-1 items-center gap-1 overflow-x-auto">
+              <div ref={stepsRef} className="flex flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
                 {steps.map((s, i) => {
                   const firstIdx = phaseOrder.indexOf(s.id[0]);
                   const lastIdx = phaseOrder.indexOf(s.id[s.id.length - 1]);
@@ -434,6 +474,7 @@ export default function App() {
                     <React.Fragment key={s.label}>
                       {i > 0 && <div className={`h-0.5 w-2 shrink-0 sm:w-4 ${done || active ? 'bg-indigo-400' : 'bg-slate-200'}`} />}
                       <span
+                        aria-current={active ? 'step' : undefined}
                         className={`shrink-0 rounded-full px-2 py-0.5 text-[12px] font-bold ${
                           active ? 'bg-indigo-600 text-white shadow' : done ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
                         }`}
@@ -445,7 +486,7 @@ export default function App() {
                 })}
               </div>
               <button
-                onClick={goHome}
+                onClick={() => guardLeave(goHome)}
                 className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-bold text-rose-600 hover:bg-rose-50"
               >
                 <Square className="h-3 w-3" /> 中断
@@ -474,10 +515,10 @@ export default function App() {
                       {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
                     </IconToggle>
                   </div>
-                  <div className="mx-auto h-48 w-48 pt-4 sm:h-56 sm:w-56">
+                  <div className="mx-auto h-36 w-36 pt-3 sm:h-56 sm:w-56 sm:pt-4">
                     <ExaminerFigure examiner={examiner} speaking={speaking} listening={listening} />
                   </div>
-                  <div className="min-h-[5.5rem] border-t border-slate-200 bg-white/90 px-4 py-3">
+                  <div className="min-h-[4.5rem] border-t border-slate-200 bg-white/90 px-4 py-3 sm:min-h-[5.5rem]" aria-live="polite">
                     {examMode && phase !== 'scoring' ? (
                       <div className="flex items-center gap-3">
                         <div className="flex h-6 items-end gap-0.5">
@@ -507,6 +548,8 @@ export default function App() {
                     )}
                   </div>
                 </div>
+                {/* スマホではカードを読みながら答えられるよう、画面下に固定 */}
+                <div className="fixed inset-x-0 bottom-0 z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:p-0">
                 <MicBar
                   exam={examMode}
                   speaking={speaking}
@@ -516,10 +559,11 @@ export default function App() {
                   silence={silence}
                   busyLabel={phase === 'silent_reading' ? '黙読中（声に出さずに読みましょう）' : phase === 'q2_prep' ? '準備時間（20秒）：3コマの流れを頭の中で組み立てましょう' : phase === 'scoring' ? '採点中…' : pending ? '解説を確認しましょう' : undefined}
                 />
+                </div>
               </div>
 
               {/* card / feedback side */}
-              <div className="min-h-[420px] min-w-0 lg:col-span-7 lg:h-full lg:min-h-0">
+              <div ref={cardPaneRef} className="min-h-[420px] min-w-0 scroll-mt-[4.25rem] lg:col-span-7 lg:h-full lg:min-h-0">
                 {pending ? (
                   <FeedbackPanel
                     key={pending.rec.item + pending.rec.answer}
@@ -544,6 +588,30 @@ export default function App() {
         )}
       </main>
 
+      {leave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn" onClick={closeLeave}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="leave-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 id="leave-title" className="text-base font-black text-slate-900">面接を中断しますか？</h2>
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-600">ここまでの回答と採点は記録に残りません。</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button autoFocus onClick={closeLeave} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">
+                面接を続ける
+              </button>
+              <button
+                onClick={() => {
+                  const run = leave.run;
+                  setLeave(null);
+                  run();
+                }}
+                className="rounded-xl border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50"
+              >
+                中断する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SettingsModal open={showSettings} settings={settings} status={status} onChange={setSettings} onClose={() => setShowSettings(false)} />
       <StrategyGuideModal isOpen={showGuide} grade={shownGrade.id} onClose={() => setShowGuide(false)} />
     </div>
@@ -566,6 +634,8 @@ const IconToggle: React.FC<{ on: boolean; onClick: () => void; title: string; ch
   <button
     onClick={onClick}
     title={title}
+    aria-label={title}
+    aria-pressed={on}
     className={`rounded-full p-1.5 transition ${on ? 'bg-indigo-600 text-white' : 'bg-white/80 text-slate-500 hover:bg-white'}`}
   >
     {children}
