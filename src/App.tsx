@@ -117,6 +117,8 @@ export default function App() {
   const [leave, setLeave] = useState<{ run: () => void } | null>(null);
   const cardPaneRef = useRef<HTMLDivElement>(null);
   const stepsRef = useRef<HTMLDivElement>(null);
+  const interviewRef = useRef<HTMLDivElement>(null);
+  const micWrapRef = useRef<HTMLDivElement>(null);
 
   const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
   const useClaude = canUseAI(settings, status);
@@ -316,6 +318,15 @@ export default function App() {
     if (cardState === 'none' && !hasPending) return;
     cardPaneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [screen, cardState, hasPending]);
+  // スマホ: 下に固定したマイク欄の高さぶん、ページ下に余白を取る（カードの下端まで読めるように）
+  useEffect(() => {
+    const wrap = micWrapRef.current;
+    const root = interviewRef.current;
+    if (screen !== 'interview' || !wrap || !root || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => root.style.setProperty('--mic-h', `${wrap.offsetHeight}px`));
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [screen]);
   // 進行バー: 現在の段階が見える位置まで横スクロール
   useEffect(() => {
     const box = stepsRef.current;
@@ -458,7 +469,7 @@ export default function App() {
         )}
 
         {screen === 'interview' && (
-          <div className="flex flex-1 flex-col gap-3 pb-44 lg:h-[calc(100dvh-3.5rem-2.75rem)] lg:min-h-0 lg:flex-none lg:pb-0">
+          <div ref={interviewRef} className="flex flex-1 flex-col gap-3 pb-[calc(var(--mic-h,11rem)+0.5rem)] lg:h-[calc(100dvh-3.5rem-2.75rem)] lg:min-h-0 lg:flex-none lg:pb-0">
             {/* progress */}
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
               <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
@@ -549,7 +560,7 @@ export default function App() {
                   </div>
                 </div>
                 {/* スマホではカードを読みながら答えられるよう、画面下に固定 */}
-                <div className="fixed inset-x-0 bottom-0 z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:p-0">
+                <div ref={micWrapRef} className="fixed inset-x-0 bottom-0 z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:p-0">
                 <MicBar
                   exam={examMode}
                   speaking={speaking}
@@ -589,7 +600,7 @@ export default function App() {
       </main>
 
       {leave && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn" onClick={closeLeave}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn" onClick={closeLeave}>
           <div role="alertdialog" aria-modal="true" aria-labelledby="leave-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 id="leave-title" className="text-base font-black text-slate-900">面接を中断しますか？</h2>
             <p className="mt-1.5 text-sm leading-relaxed text-slate-600">ここまでの回答と採点は記録に残りません。</p>

@@ -131,8 +131,8 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
   const startRandom = () => randomPool.length && onStart(randomPool[Math.floor(Math.random() * randomPool.length)]);
   // おまかせボタンの横に出す、選ばれ方の説明
   const randomHint =
-    statusFilter !== 'all' || level !== 'all'
-      ? '絞り込み中のカードから'
+    statusFilter !== 'all'
+      ? `「${STATUS_LABEL[statusFilter]}」のカードから`
       : untried.length
         ? `未挑戦のカードから（残り${untried.length}枚）`
         : almost.length
@@ -315,7 +315,6 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
             <button
               key={c.id}
               onClick={() => onStart(c)}
-              aria-label={`${c.title}（${c.japaneseTitle}）で面接を開始`}
               className={`group flex flex-col rounded-2xl border-2 p-3.5 text-left sm:p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md ${STATUS_CARD[st]}`}
             >
               <div className="flex items-center gap-2">
