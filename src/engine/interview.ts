@@ -6,15 +6,21 @@ import { EvalResult, evaluateAnswer } from '../lib/api';
 import { isYesAnswer } from '../lib/scoring';
 import { AzureUnavailableError, azureConfigured, listenReadingAzure } from '../lib/azurePronunciation';
 import { gradeInfo, hasFollowUp } from '../lib/grade';
+import { startRecording } from '../lib/audioStore';
+import { analyzeFluency, mergeFluency } from '../lib/fluency';
+import { HintTarget, answerJa, hintTarget } from '../lib/hints';
 
 export const modelReadingText = (card: ExamCard) => `${card.title}. ${card.passage}`;
 
 export type CardState = 'none' | 'front' | 'back';
 export type FeedbackAction = 'next' | 'retry';
 
+/** 誰の発話か（デモでは受験者役も話す） */
+export type Speaker = 'examiner' | 'candidate';
+
 export interface Bridge {
   setPhase(p: PhaseId): void;
-  setLine(text: string | null, ja?: string): void;
+  setLine(text: string | null, ja?: string, who?: Speaker): void;
   setSpeaking(b: boolean): void;
   setListening(active: boolean, hint?: string): void;
   setInterim(text: string): void;
@@ -24,7 +30,30 @@ export interface Bridge {
   upsertRecord(rec: AnswerRecord): void;
   /** 練習モード: 1問ごとの解説表示。ユーザーの選択（または自動で next）を返す */
   showFeedback(rec: AnswerRecord, evalPromise: Promise<EvalResult>): Promise<FeedbackAction>;
+  /** 練習モード: いま答えている質問のヒント対象（null で非表示） */
+  setHintTarget?(t: HintTarget | null): void;
+  /** 直前の回答で見たヒントの段階数を返し、0 に戻す */
+  takeHintsUsed?(): number;
 }
+
+export interface RunOptions {
+  /** お手本デモ: 受験者役も音声で自動再生し、採点・記録はしない */
+  demo?: boolean;
+  /** デモの受験者役の声 */
+  candidateVoice?: { voiceHints: string[]; rate: number; pitch: number };
+}
+
+/** デモの受験者役のあいさつ（面接官の台詞 → 受験者の返事） */
+const DEMO_SMALLTALK: [RegExp, string, string][] = [
+  [/^Hello\.$/, 'Hello.', 'こんにちは。'],
+  [/Can I have your card/, 'Here you are.', 'はい、どうぞ。'],
+  [/Please sit down/, 'Thank you.', 'ありがとうございます。'],
+  [/May I have your name/, 'My name is Aoi Tanaka.', '田中あおいです。'],
+  [/test\. OK\?/, 'OK.', 'はい。'],
+  [/How are you\?/, "I'm fine, thank you.", '元気です、ありがとうございます。'],
+  [/card back/, 'Here you are.', 'はい、どうぞ。'],
+  [/You may go now/, 'Thank you. Goodbye.', 'ありがとうございました。さようなら。'],
+];
 
 export interface InterviewResult {
   records: AnswerRecord[];
@@ -46,9 +75,12 @@ export async function runInterview(
   settings: AppSettings,
   useClaude: boolean,
   bridge: Bridge,
-  signal: AbortSignal
+  signal: AbortSignal,
+  opts: RunOptions = {}
 ): Promise<InterviewResult> {
-  const practice = settings.mode === 'practice';
+  const demo = !!opts.demo;
+  // デモは練習モード扱い（字幕あり）だが、解説・採点は出さない
+  const practice = settings.mode === 'practice' && !demo;
   // 練習モードのクイック開始: 入室・あいさつ・退室を省いて、カードの黙読から始める
   const quick = practice && settings.quickStart;
   const grade = gradeInfo(card);
@@ -62,7 +94,7 @@ export async function runInterview(
   let candidateName = '';
 
   const say = async (text: string, ja?: string) => {
-    bridge.setLine(text, ja);
+    bridge.setLine(text, ja, 'examiner');
     bridge.setSpeaking(true);
     try {
       await speak(text, {
@@ -78,7 +110,9 @@ export async function runInterview(
   };
 
   /** 1秒ごとのカウントダウン（黙読・2級 No.2 の準備時間）。残り3秒から音を鳴らす */
-  const countdown = async (sec: number) => {
+  const countdown = async (full: number) => {
+    // デモでは待ち時間を短縮
+    const sec = demo ? Math.min(full, 5) : full;
     try {
       for (let s = sec; s > 0; s--) {
         bridge.setTimer(s);
@@ -110,24 +144,49 @@ export async function runInterview(
     playSfx('micOn');
     bridge.setInterim('');
     bridge.setListening(true, hint);
+    const recording = settings.recordAudio ? startRecording() : null;
+    let result: ListenResult | null = null;
     try {
-      return await listen({
+      result = await listen({
         ...cfg,
         signal,
         onInterim: bridge.setInterim,
         onSilenceProgress: bridge.setSilence,
       });
+      return result;
     } finally {
       bridge.setListening(false);
       bridge.setSilence(0);
       playSfx('micOff');
+      // 声が入った回答だけ保存する（中断時は捨てる）
+      const keep = !!result?.text && result.reason !== 'pardon' && result.reason !== 'typed';
+      const id = recording ? await recording.stop(keep) : null;
+      if (result && id) result.audioId = id;
     }
+  };
+
+  /** デモ: 受験者役が答える */
+  const candidateSay = async (text: string, ja?: string): Promise<ListenResult> => {
+    await sleep(700, signal);
+    bridge.setLine(text, ja, 'candidate');
+    bridge.setSpeaking(true);
+    try {
+      const v = opts.candidateVoice;
+      await speak(text, { voiceHints: v?.voiceHints ?? [], rate: (v?.rate ?? 0.95) * settings.speechRate, pitch: v?.pitch ?? 1.1, signal });
+    } finally {
+      bridge.setSpeaking(false);
+    }
+    await sleep(500, signal);
+    return { text, latencySec: 1, reason: 'silence' };
   };
 
   /** 音読: Azure 設定があれば発音評価付きで録音。失敗時はブラウザの音声認識 */
   const hearReading = async (): Promise<ListenResult & { assessment?: ReadingAssessment | null; note?: string }> => {
+    if (demo) return candidateSay(modelReadingText(card), card.passageJa);
     let note: string | undefined;
     if (azureConfigured(settings.azureKey, settings.azureRegion)) {
+      const recording = settings.recordAudio ? startRecording() : null;
+      let got: (ListenResult & { assessment?: ReadingAssessment | null }) | null = null;
       playSfx('micOn');
       bridge.setInterim('');
       bridge.setListening(true, 'タイトルから音読しましょう（発音評価中）');
@@ -135,7 +194,7 @@ export async function runInterview(
         // 抑揚評価つき → 失敗したら抑揚なしで再接続
         for (const prosody of [true, false]) {
           try {
-            return await listenReadingAzure({
+            got = await listenReadingAzure({
               key: settings.azureKey,
               region: settings.azureRegion,
               referenceText: modelReadingText(card),
@@ -147,6 +206,7 @@ export async function runInterview(
               onSilenceProgress: bridge.setSilence,
               prosody,
             });
+            return got;
           } catch (e) {
             if (!(e instanceof AzureUnavailableError)) throw e;
             note = e.message;
@@ -157,6 +217,8 @@ export async function runInterview(
         bridge.setListening(false);
         bridge.setSilence(0);
         playSfx('micOff');
+        const id = recording ? await recording.stop(!!got?.text) : null;
+        if (got && id) got.audioId = id;
       }
     }
     const r = await hear('reading', 'タイトルから音読しましょう');
@@ -166,6 +228,12 @@ export async function runInterview(
   /** 挨拶など採点外のやりとり */
   const smallTalk = async (line: string, hint: string, ja?: string) => {
     await say(line, ja);
+    if (demo) {
+      const m = DEMO_SMALLTALK.find(([re]) => re.test(line));
+      greetingTotal++;
+      greetingAnswered++;
+      return candidateSay(m?.[1] ?? 'OK.', m?.[2]);
+    }
     const r = await hear('short', hint);
     greetingTotal++;
     if (r.text) greetingAnswered++;
@@ -214,9 +282,17 @@ export async function runInterview(
         bridge.setPhase('q2');
         await say('Please begin.', '始めてください。');
       }
-      let r = await hear(kind, firstHint);
+      let r: ListenResult;
+      if (demo) {
+        // デモ: Yes/No の設問は Yes 側で答える
+        const first = hasFollowUp(q) ? 'Yes.' : q.modelAnswers[0] ?? '';
+        r = await candidateSay(first, hasFollowUp(q) ? 'はい。' : answerJa(card.id, item));
+      } else {
+        if (practice && settings.showHints) bridge.setHintTarget?.(hintTarget(card, item));
+        r = await hear(kind, firstHint);
+      }
 
-      for (let tries = 0; tries < 2; tries++) {
+      for (let tries = 0; tries < 2 && !demo; tries++) {
         if (r.reason === 'pardon' || (PARDON_RE.test(r.text) && r.text.split(' ').length <= 5)) {
           pardonUsed = true;
           await say(`All right. ${repeatText}`, repeatJa);
@@ -233,17 +309,31 @@ export async function runInterview(
         answer: r.text,
         latencySec: r.latencySec,
         pardonUsed,
+        audioId: r.audioId,
+        fluency: r.text && !demo ? analyzeFluency(r.text, r.pauses ?? 0, r.longestPauseSec ?? 0) : undefined,
       };
 
       if (hasFollowUp(q) && r.text) {
         const yes = isYesAnswer(r.text);
         const follow = yes === false ? q.followUpNo : q.followUpYes;
         await say(follow);
-        const f = await hear(g2 ? 'opinion' : 'answer', g2 ? '理由を2文で答えましょう' : pre2 ? '2文で詳しく答えましょう' : '続けてもう少し話しましょう');
+        let f: ListenResult;
+        if (demo) {
+          f = await candidateSay(q.modelAnswersYes[0] ?? '', answerJa(card.id, item, 'yes'));
+        } else {
+          if (practice && settings.showHints) bridge.setHintTarget?.(hintTarget(card, item, { question: follow, yes: yes !== false }));
+          f = await hear(g2 ? 'opinion' : 'answer', g2 ? '理由を2文で答えましょう' : pre2 ? '2文で詳しく答えましょう' : '続けてもう少し話しましょう');
+        }
         rec.followUpQuestion = follow;
         rec.followUpAnswer = f.text;
+        rec.followUpAudioId = f.audioId;
+        if (f.text && !demo) rec.fluency = mergeFluency(rec.fluency, analyzeFluency(f.text, f.pauses ?? 0, f.longestPauseSec ?? 0));
       }
+      bridge.setHintTarget?.(null);
+      const hints = bridge.takeHintsUsed?.() ?? 0;
+      if (hints) rec.hintsUsed = hints;
 
+      if (demo) return;
       records.set(item, rec);
       bridge.upsertRecord(rec);
       const p = startEval(rec);
@@ -295,7 +385,7 @@ export async function runInterview(
 
     // ---- 音読 ----
     bridge.setPhase('reading_aloud');
-    if (practice && settings.listenModelFirst) {
+    if (practice && settings.listenModelFirst && !demo) {
       // 練習モード: 先にお手本音読を聞く（本番にはない練習用ステップ）
       await say("Before you read, let's listen to a model reading.", '音読の前に、お手本を聞きましょう。');
       bridge.setLine(modelReadingText(card), 'お手本音読：区切り（カンマ・ピリオド）と強弱をまねしましょう');
@@ -322,11 +412,14 @@ export async function runInterview(
       pardonUsed: false,
       pronunciation: rd.assessment ?? undefined,
       pronunciationNote: rd.assessment ? undefined : rd.note,
+      audioId: rd.audioId,
     };
-    records.set('reading', readingRec);
-    bridge.upsertRecord(readingRec);
-    const readEval = startEval(readingRec);
-    if (practice) await bridge.showFeedback(readingRec, readEval);
+    if (!demo) {
+      records.set('reading', readingRec);
+      bridge.upsertRecord(readingRec);
+      const readEval = startEval(readingRec);
+      if (practice) await bridge.showFeedback(readingRec, readEval);
+    }
 
     // ---- No.1 - No.3 ----
     const questions = grade.items.length - 1; // 音読を除く

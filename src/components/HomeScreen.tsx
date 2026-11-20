@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { practiceStreak, practicedToday, recentAverage, weekCount } from '../lib/stats';
-import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame, Zap, CalendarDays } from 'lucide-react';
+import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame, Zap, CalendarDays, Clapperboard, Repeat, Languages, BookMarked } from 'lucide-react';
+import { duePhrases, loadPhrases } from '../lib/phrasebook';
+import type { DrillTab } from './DrillScreen';
 import { AppSettings, ExamCard, Grade, HistoryRecord, InterviewMode } from '../types';
 import { GRADES, GRADE_ORDER } from '../lib/grade';
 import { EXAMINERS } from '../data/examiners';
@@ -17,6 +19,9 @@ interface Props {
   onSettings: (s: AppSettings) => void;
   onStart: (card: ExamCard) => void;
   onOpenHistory: () => void;
+  /** お手本デモ（受験者役も自動で話す）を見る */
+  onDemo: (card: ExamCard) => void;
+  onOpenDrill: (tab: DrillTab) => void;
 }
 
 const ProgressPanel: React.FC<{ history: HistoryRecord[]; allHistory: HistoryRecord[]; total: number; passed: number }> = ({ history, allHistory, total, passed }) => {
@@ -89,7 +94,17 @@ const STATUS_CARD: Record<Status, string> = {
   passed: 'border-emerald-300 bg-emerald-50/40',
 };
 
-export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHistory, onSettings, onStart, onOpenHistory }) => {
+export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHistory, onSettings, onStart, onOpenHistory, onDemo, onOpenDrill }) => {
+  const [phraseStat, setPhraseStat] = useState({ total: 0, due: 0 });
+  useEffect(() => {
+    const upd = () => {
+      const all = loadPhrases();
+      setPhraseStat({ total: all.length, due: duePhrases(all).length });
+    };
+    upd();
+    window.addEventListener('phrasebook-change', upd);
+    return () => window.removeEventListener('phrasebook-change', upd);
+  }, []);
   const [level, setLevel] = useState<'all' | ExamCard['level']>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | Status>('all');
   const best = useMemo(() => {
@@ -128,6 +143,17 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
           ? `あと少しのカードからランダム（${almost.length}枚）`
           : 'ランダムで開始';
 
+  const startRandom = () => randomPool.length && onStart(randomPool[Math.floor(Math.random() * randomPool.length)]);
+  // おまかせボタンの横に出す、選ばれ方の説明
+  const randomHint =
+    statusFilter !== 'all'
+      ? `「${STATUS_LABEL[statusFilter]}」のカードから`
+      : untried.length
+        ? `未挑戦のカードから（残り${untried.length}枚）`
+        : almost.length
+          ? `「あと少し」のカードから（${almost.length}枚）`
+          : '全カードから';
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 pb-10">
       {/* hero */}
@@ -153,7 +179,19 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
         <p className="mt-2 max-w-2xl text-sm text-indigo-50">
           {GRADES[settings.grade].intro}
         </p>
-        <div className="mt-4 flex flex-wrap gap-2 text-[12px] font-bold">
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <button
+            onClick={startRandom}
+            disabled={!randomPool.length}
+            className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-base font-black text-indigo-700 shadow-lg transition hover:-translate-y-0.5 hover:bg-indigo-50 active:translate-y-0 disabled:opacity-50"
+          >
+            <Play className="h-5 w-5 fill-current" /> おまかせで1枚はじめる
+          </button>
+          <span className="text-[12px] font-bold text-indigo-100">
+            {settings.mode === 'exam' ? '本番モード' : settings.quickStart ? 'クイック練習' : '練習モード'} · {randomHint}
+          </span>
+        </div>
+        <div className="mt-4 hidden flex-wrap gap-2 text-[12px] font-bold sm:flex">
           {[
             [Mic, 'マイクで回答・自動送信'],
             [Timer, '黙読20秒タイマー'],
@@ -221,6 +259,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
                 <button
                   key={e.id}
                   onClick={() => onSettings({ ...settings, examinerId: e.id })}
+                  aria-pressed={settings.examinerId === e.id}
                   className={`flex flex-col items-center rounded-xl border-2 p-2 text-center transition ${
                     settings.examinerId === e.id ? 'border-indigo-600 bg-indigo-50 shadow-sm' : 'border-slate-200 hover:border-slate-300'
                   }`}
@@ -238,6 +277,33 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
         </div>
       </section>
 
+      {/* トレーニング */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-2 flex items-baseline gap-2">
+          <div className="text-sm font-black text-slate-900">トレーニング</div>
+          <div className="text-[12px] text-slate-500">面接の前後に、答え方を体に入れる</div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {(
+            [
+              [Clapperboard, 'お手本デモ', '受験者役も話す面接を通しで見る', () => randomPool.length && onDemo(randomPool[Math.floor(Math.random() * randomPool.length)]), null],
+              [Repeat, 'シャドーイング', '模範解答を聞いてまねして言う', () => onOpenDrill('repeat'), null],
+              [Languages, '瞬間英作文', '日本語を見てすぐ英語で言う', () => onOpenDrill('instant'), null],
+              [BookMarked, '表現帳', phraseStat.total ? `保存 ${phraseStat.total}件` : '解説の＋表現帳で保存', () => onOpenDrill('phrasebook'), phraseStat.due ? `復習 ${phraseStat.due}` : null],
+            ] as const
+          ).map(([Icon, title, desc, onClick, badge]) => (
+            <button key={title} onClick={onClick} className="relative flex items-start gap-2 rounded-xl border-2 border-slate-200 p-2.5 text-left transition hover:border-indigo-400 hover:bg-indigo-50/40">
+              <Icon className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
+              <span className="min-w-0">
+                <span className="block text-sm font-black text-slate-900">{title}</span>
+                <span className="block text-[11px] leading-snug text-slate-500">{desc}</span>
+              </span>
+              {badge && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow">{badge}</span>}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {/* cards */}
       <section>
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -246,7 +312,7 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
             挑戦済み {done}/{cards.length} · 合格圏 {passedCount}
           </span>
           <button
-            onClick={() => randomPool.length && onStart(randomPool[Math.floor(Math.random() * randomPool.length)])}
+            onClick={startRandom}
             disabled={!randomPool.length}
             className="ml-auto inline-flex items-center gap-1 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-40"
           >
@@ -254,23 +320,25 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
           </button>
         </div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="flex gap-1 rounded-xl bg-slate-200/70 p-1 text-xs font-bold">
+          <div className="flex gap-1 rounded-xl bg-slate-200/70 p-1 text-xs font-bold" role="group" aria-label="挑戦状況で絞り込む">
             {(['all', 'untried', 'almost', 'passed'] as const).map((st) => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`rounded-lg px-2.5 py-1 ${statusFilter === st ? 'bg-white text-slate-900 shadow' : 'text-slate-500'}`}
+                aria-pressed={statusFilter === st}
+                className={`whitespace-nowrap rounded-lg px-2.5 py-1 ${statusFilter === st ? 'bg-white text-slate-900 shadow' : 'text-slate-500'}`}
               >
                 {st === 'all' ? `すべて ${byLevel.length}` : `${STATUS_LABEL[st]} ${statusCount(st)}`}
               </button>
             ))}
           </div>
-          <div className="ml-auto flex gap-1 rounded-xl bg-slate-200/70 p-1 text-xs font-bold">
+          <div className="flex gap-1 rounded-xl bg-slate-200/70 p-1 text-xs font-bold sm:ml-auto" role="group" aria-label="レベルで絞り込む">
             {(['all', 'basic', 'standard', 'challenge'] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => setLevel(l)}
-                className={`rounded-lg px-2.5 py-1 ${level === l ? 'bg-white text-slate-900 shadow' : 'text-slate-500'}`}
+                aria-pressed={level === l}
+                className={`whitespace-nowrap rounded-lg px-2.5 py-1 ${level === l ? 'bg-white text-slate-900 shadow' : 'text-slate-500'}`}
               >
                 {l === 'all' ? '全レベル' : LEVEL_LABEL[l]}
               </button>
@@ -286,10 +354,10 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
           {list.map((c) => {
             const st = statusOf(c);
             return (
+            <div key={c.id} className="relative">
             <button
-              key={c.id}
               onClick={() => onStart(c)}
-              className={`group flex flex-col rounded-2xl border-2 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md ${STATUS_CARD[st]}`}
+              className={`group flex h-full w-full flex-col rounded-2xl border-2 p-3.5 text-left sm:p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md ${STATUS_CARD[st]}`}
             >
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-black text-slate-400">#{String(cards.indexOf(c) + 1).padStart(2, '0')}</span>
@@ -299,17 +367,34 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
                   {st === 'untried' ? '未挑戦' : `${STATUS_LABEL[st]} ${best[c.id]}点`}
                 </span>
               </div>
-              <div className="mt-2 font-serif text-lg font-bold text-slate-900">{c.title}</div>
-              <div className="text-xs text-slate-500">{c.japaneseTitle}</div>
-              {st !== 'untried' && (
-                <div className="mt-1 text-[11px] text-slate-500">
-                  挑戦 {attempts[c.id]}回{st === 'almost' ? ` · 合格目安まであと${PASS_LINE - best[c.id]}点` : ''}
+              <div className="mt-2 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="font-serif text-lg font-bold leading-snug text-slate-900">{c.title}</div>
+                  <div className="text-xs text-slate-500">{c.japaneseTitle}</div>
+                  {st !== 'untried' && (
+                    <div className="mt-1 text-[11px] text-slate-500">
+                      挑戦 {attempts[c.id]}回{st === 'almost' ? ` · 合格目安まであと${PASS_LINE - best[c.id]}点` : ''}
+                    </div>
+                  )}
                 </div>
-              )}
-              <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-indigo-600 opacity-0 transition group-hover:opacity-100">
-                <Play className="h-3.5 w-3.5" /> このカードで面接開始
+                <span
+                  aria-hidden
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 transition group-hover:bg-indigo-600 group-hover:text-white"
+                >
+                  <Play className="h-4 w-4 fill-current" />
+                </span>
               </div>
+              {/* 右下のお手本ボタンぶんの余白 */}
+              <div className="h-5" />
             </button>
+            <button
+              onClick={() => onDemo(c)}
+              aria-label={`${c.title} のお手本デモを見る`}
+              className="absolute bottom-2.5 right-3 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600 shadow-sm hover:border-indigo-300 hover:text-indigo-700"
+            >
+              <Clapperboard className="h-3 w-3" /> お手本を見る
+            </button>
+            </div>
             );
           })}
         </div>
@@ -352,6 +437,7 @@ const ModeBtn: React.FC<{ active: boolean; onClick: () => void; icon: React.Reac
 }) => (
   <button
     onClick={onClick}
+    aria-pressed={active}
     className={`rounded-xl border-2 p-3 text-left transition ${active ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}
   >
     <div className={`flex items-center gap-1.5 text-sm font-black ${active ? 'text-indigo-700' : 'text-slate-800'}`}>

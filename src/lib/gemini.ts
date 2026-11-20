@@ -1,6 +1,6 @@
 // Gemini API 呼び出し（ブラウザから REST で直接）。プロンプトは Claude と共通（prompts.ts）
 import { z } from 'zod';
-import { EvaluateInput, FeedbackSchema, ReportInput, ReportSchema, buildEvalPrompt, buildReportPrompt, clampScore, evalMaxScore } from './prompts';
+import { EvaluateInput, FeedbackSchema, ReportInput, ReportSchema, buildEvalPrompt, buildReportPrompt, clampAspects, clampScore, evalMaxScore } from './prompts';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -56,9 +56,20 @@ const FEEDBACK_RESPONSE_SCHEMA = {
     corrections: { type: 'STRING', description: '誤り・不足の具体的な指摘と直し方。日本語1-3文。問題がなければ「特になし」' },
     improvedAnswer: { type: 'STRING', description: '受験者の意図を活かした満点の英語解答' },
     tip: { type: 'STRING', description: 'この設問タイプの本番で使えるコツ。日本語1文' },
+    aspects: {
+      type: 'OBJECT',
+      description: '観点別スコア（各0-5の整数）。無回答なら全て0',
+      properties: {
+        grammar: { type: 'INTEGER', description: '文法の正確さ 0-5' },
+        vocabulary: { type: 'INTEGER', description: '語彙・表現の適切さと幅 0-5' },
+        content: { type: 'INTEGER', description: '内容（質問への的確さ・情報量・論理） 0-5' },
+      },
+      required: ['grammar', 'vocabulary', 'content'],
+      propertyOrdering: ['grammar', 'vocabulary', 'content'],
+    },
   },
-  required: ['score', 'verdict', 'goodPoints', 'corrections', 'improvedAnswer', 'tip'],
-  propertyOrdering: ['score', 'verdict', 'goodPoints', 'corrections', 'improvedAnswer', 'tip'],
+  required: ['score', 'verdict', 'goodPoints', 'corrections', 'improvedAnswer', 'tip', 'aspects'],
+  propertyOrdering: ['score', 'verdict', 'goodPoints', 'corrections', 'improvedAnswer', 'tip', 'aspects'],
 };
 
 const REPORT_RESPONSE_SCHEMA = {
@@ -116,7 +127,7 @@ async function generateStructured<T extends z.ZodType>(
 export async function evaluateWithGemini(apiKey: string, model: string, b: EvaluateInput) {
   const p = buildEvalPrompt(b);
   const r = await generateStructured(apiKey, model, p.system, p.user, FEEDBACK_RESPONSE_SCHEMA, FeedbackSchema, 16384, 60_000);
-  return { ...r, score: clampScore(r.score, evalMaxScore(b)), source: 'gemini' as const };
+  return { ...r, score: clampScore(r.score, evalMaxScore(b)), aspects: clampAspects(r.aspects), source: 'gemini' as const };
 }
 
 export async function reportWithGemini(apiKey: string, model: string, b: ReportInput) {

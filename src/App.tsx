@@ -9,7 +9,7 @@ import { EXAMINERS } from './data/examiners';
 import { loadHistory, loadSettings, saveHistory, saveSettings } from './lib/settings';
 import { ServerStatus, aiName, canUseAI, fetchStatus, generateReport, EvalResult } from './lib/api';
 import { setSfxEnabled, playSfx, unlockAudio } from './lib/sfx';
-import { AbortedError, speak, stopSpeaking, unlockSpeech } from './lib/speech';
+import { AbortedError, getActiveListen, speak, stopSpeaking, unlockSpeech } from './lib/speech';
 import { PASS_LINE, scoreAttitude } from './lib/scoring';
 import { Bridge, CardState, FeedbackAction, runInterview } from './engine/interview';
 import { HomeScreen } from './components/HomeScreen';
@@ -24,8 +24,15 @@ import { SettingsModal } from './components/SettingsModal';
 import { StrategyGuideModal } from './components/StrategyGuideModal';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SessionDetail, loadSessionDetail, saveSessionDetail } from './lib/sessionLog';
+import { useModal } from './lib/useModal';
+import { closeRecorderMic, openRecorderMic } from './lib/audioStore';
+import { HintTarget } from './lib/hints';
+import { computeAspects } from './lib/aspects';
+import { HintBox } from './components/HintBox';
+import { DrillScreen, DrillTab } from './components/DrillScreen';
+import { Speaker } from './engine/interview';
 
-type Screen = 'home' | 'interview' | 'report' | 'history' | 'review';
+type Screen = 'home' | 'interview' | 'report' | 'history' | 'review' | 'drill';
 
 const CARDS_BY_GRADE: Record<Grade, ExamCard[]> = { '3': EXAM_CARDS, pre2: PRE2_CARDS, '2': GRADE2_CARDS };
 const ALL_CARDS = [...EXAM_CARDS, ...PRE2_CARDS, ...GRADE2_CARDS];
@@ -94,7 +101,7 @@ export default function App() {
 
   // interview live state
   const [phase, setPhase] = useState<PhaseId>('idle');
-  const [line, setLine] = useState<{ text: string; ja?: string } | null>(null);
+  const [line, setLine] = useState<{ text: string; ja?: string; who?: Speaker } | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
   const [hint, setHint] = useState('');
@@ -108,10 +115,25 @@ export default function App() {
   const [aiPending, setAiPending] = useState(false);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [quickRun, setQuickRun] = useState(false);
+  // お手本デモ（受験者役も自動で話す）。done = 最後まで再生した
+  const [demoRun, setDemoRun] = useState<null | 'running' | 'done'>(null);
+  const [drillTab, setDrillTab] = useState<DrillTab>('repeat');
+  // 練習モードのヒント
+  const [hintTarget, setHintTarget] = useState<HintTarget | null>(null);
+  const [hintShown, setHintShown] = useState(0);
+  const hintsUsedRef = useRef(0);
+  // 結果画面に出している回の ID（前回との比較用）
+  const [reportId, setReportId] = useState<string | null>(null);
   // 記録の振り返り
   const [review, setReview] = useState<{ detail: SessionDetail; card: ExamCard; date: string } | null>(null);
   const [historyDay, setHistoryDay] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // 面接の途中で画面を離れる操作の確認（null なら非表示）
+  const [leave, setLeave] = useState<{ run: () => void } | null>(null);
+  const cardPaneRef = useRef<HTMLDivElement>(null);
+  const stepsRef = useRef<HTMLDivElement>(null);
+  const interviewRef = useRef<HTMLDivElement>(null);
+  const micWrapRef = useRef<HTMLDivElement>(null);
 
   const examiner = useMemo(() => EXAMINERS.find((e) => e.id === settings.examinerId) || EXAMINERS[0], [settings.examinerId]);
   const useClaude = canUseAI(settings, status);
@@ -129,7 +151,7 @@ export default function App() {
         : GRADES[gradeOf(card)];
   const gradeHistory = useMemo(() => history.filter((h) => historyGrade(h) === settings.grade), [history, settings.grade]);
   // 本番モード: 字幕・ヒント・認識文字・黙読タイマーを出さない
-  const examMode = settings.mode === 'exam';
+  const examMode = settings.mode === 'exam' && !demoRun;
 
   useEffect(() => {
     fetchStatus().then(setStatus);
@@ -157,12 +179,17 @@ export default function App() {
     setPending(null);
     setReport(null);
     setAiPending(false);
+    setHintTarget(null);
+    setHintShown(0);
+    hintsUsedRef.current = 0;
+    setDemoRun(null);
   };
 
   const stopInterview = () => {
     abortRef.current?.abort();
     abortRef.current = null;
     stopSpeaking();
+    closeRecorderMic();
   };
 
   const goHome = () => {
@@ -171,33 +198,46 @@ export default function App() {
     setScreen('home');
   };
 
-  const start = async (c: ExamCard) => {
+  const start = async (c: ExamCard, opts: { demo?: boolean } = {}) => {
+    const demo = !!opts.demo;
     unlockAudio();
     stopInterview();
     unlockSpeech();
     resetLive();
     setCard(c);
     setReview(null);
-    const quick = settings.mode === 'practice' && settings.quickStart;
+    setDemoRun(demo ? 'running' : null);
+    const quick = settings.mode === 'practice' && settings.quickStart && !demo;
     setQuickRun(quick);
-    setShowJa(settings.mode === 'practice');
+    setShowJa(settings.mode === 'practice' || demo);
     setScreen('interview');
     window.scrollTo({ top: 0 });
 
-    // マイク許可を先に取っておく（本番中にダイアログが出ないように）
-    try {
-      const s = await navigator.mediaDevices?.getUserMedia({ audio: true });
-      s?.getTracks().forEach((t) => t.stop());
-    } catch {
-      /* キーボード入力で続行 */
-    }
-
+    // 待機中（マイク許可ダイアログ等）に画面を離れたら開始しない
     const ac = new AbortController();
     abortRef.current = ac;
+    if (!demo) {
+      // マイク許可を先に取っておく（本番中にダイアログが出ないように）。録音する場合はマイクを開いたままにする
+      if (settings.recordAudio && (await openRecorderMic())) {
+        /* 録音用に開いたまま */
+      } else {
+        try {
+          const s = await navigator.mediaDevices?.getUserMedia({ audio: true });
+          s?.getTracks().forEach((t) => t.stop());
+        } catch {
+          /* キーボード入力で続行 */
+        }
+      }
+      if (ac.signal.aborted) {
+        if (abortRef.current === null || abortRef.current === ac) closeRecorderMic();
+        return;
+      }
+    }
+
     const recMap = new Map<ScoredItem, AnswerRecord>();
     const bridge: Bridge = {
       setPhase,
-      setLine: (text, ja) => setLine(text ? { text, ja } : null),
+      setLine: (text, ja, who) => setLine(text ? { text, ja, who } : null),
       setSpeaking,
       setListening: (a, h) => {
         setListening(a);
@@ -215,10 +255,31 @@ export default function App() {
         new Promise<FeedbackAction>((resolve) => {
           setPending({ rec, promise, resolve });
         }).finally(() => setPending(null)),
+      setHintTarget: (t) => {
+        setHintTarget(t);
+        setHintShown(0);
+      },
+      takeHintsUsed: () => {
+        const n = hintsUsedRef.current;
+        hintsUsedRef.current = 0;
+        return n;
+      },
     };
 
+    // デモの受験者役: 面接官とは別の声
+    const other = EXAMINERS.find((e) => e.id !== examiner.id) ?? examiner;
     try {
-      const result = await runInterview(c, examiner, { ...settings }, useClaude, bridge, ac.signal);
+      const result = await runInterview(c, examiner, { ...settings }, useClaude, bridge, ac.signal, {
+        demo,
+        candidateVoice: { voiceHints: other.voiceHints, rate: other.rate, pitch: Math.min(1.4, other.pitch + 0.15) },
+      });
+      if (demo) {
+        if (!ac.signal.aborted) {
+          setPhase('report');
+          setDemoRun('done');
+        }
+        return;
+      }
       setPhase('scoring');
       await result.evals;
       if (ac.signal.aborted) return;
@@ -274,6 +335,7 @@ export default function App() {
       setHistory(saveHistory(nextHistory));
       saveSessionDetail(detail);
       setHistoryDay(null); // 次に記録を開いたときは最新の日を表示
+      setReportId(h.id);
       setReport(base);
       setRecords(recs);
       setPhase('report');
@@ -289,8 +351,84 @@ export default function App() {
       setAiPending(false);
     } catch (e) {
       if (!(e instanceof AbortedError)) console.error(e);
+    } finally {
+      // 別の面接が始まっていなければマイクを閉じる
+      if (abortRef.current === ac || abortRef.current === null) closeRecorderMic();
     }
   };
+
+  /** 前回（同じ級で、この回より前）の観点別スコア */
+  const previousAspects = (id: string | null, grade: Grade) => {
+    if (!id) return null;
+    for (const h of history) {
+      if (h.id === id || Number(h.id) >= Number(id) || historyGrade(h) !== grade) continue;
+      const d = loadSessionDetail(h.id);
+      const c = findCard(h.cardId);
+      if (!d || !c) continue;
+      return { values: computeAspects(c, d.records, d.report).values, label: `前回（${h.date.split(' ')[0]}）` };
+    }
+    return null;
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const reportPrev = useMemo(() => previousAspects(reportId, gradeOf(card)), [reportId, card, history]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const reviewPrev = useMemo(() => (review ? previousAspects(review.detail.id, gradeOf(review.card)) : null), [review, history]);
+
+  const openDrill = (tab: DrillTab) => {
+    stopInterview();
+    resetLive();
+    setDrillTab(tab);
+    setScreen('drill');
+    window.scrollTo({ top: 0 });
+  };
+
+  const revealHint = () => {
+    setHintShown((n) => {
+      hintsUsedRef.current = Math.max(hintsUsedRef.current, n + 1);
+      return n + 1;
+    });
+    // ヒントを読んでいる間に「無言」で打ち切られないよう延長
+    getActiveListen()?.extend?.();
+  };
+
+  /** 面接の途中なら確認してから実行（記録が残らないため） */
+  const guardLeave = (run: () => void) => {
+    if (screen === 'interview' && phase !== 'idle' && !demoRun) setLeave({ run });
+    else run();
+  };
+  const closeLeave = useCallback(() => setLeave(null), []);
+  useModal(!!leave, closeLeave);
+  // 確認中に面接が終わったら、確認は閉じる
+  useEffect(() => {
+    if (screen !== 'interview') setLeave(null);
+  }, [screen]);
+
+  // スマホ: カードが渡されたとき・解説が出たときに、その位置まで自動でスクロール
+  const hasPending = !!pending;
+  useEffect(() => {
+    if (screen !== 'interview' || window.innerWidth >= 1024) return;
+    if (cardState === 'none' && !hasPending) return;
+    cardPaneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [screen, cardState, hasPending]);
+  // スマホ: 下に固定したマイク欄の高さぶん、ページ下に余白を取る（カードの下端まで読めるように）
+  useEffect(() => {
+    const wrap = micWrapRef.current;
+    const root = interviewRef.current;
+    if (screen !== 'interview' || !wrap || !root || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => root.style.setProperty('--mic-h', `${wrap.offsetHeight}px`));
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [screen]);
+  // 進行バー: 現在の段階が見える位置まで横スクロール
+  useEffect(() => {
+    const box = stepsRef.current;
+    const el = box?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (!box || !el) return;
+    const b = box.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    box.scrollTo({ left: box.scrollLeft + r.left - b.left - (b.width - r.width) / 2, behavior: 'smooth' });
+  }, [phase]);
 
   const nextCard = () => {
     const list = CARDS_BY_GRADE[gradeOf(card)];
@@ -299,6 +437,8 @@ export default function App() {
   };
 
   const phaseIdx = phaseOrder.indexOf(phase);
+  // デモの受験者役が話している間は、面接官の口を動かさない
+  const examinerSpeaking = speaking && line?.who !== 'candidate';
 
   const openHistory = () => {
     stopInterview();
@@ -325,14 +465,16 @@ export default function App() {
     <div className="flex min-h-screen flex-col bg-slate-100 text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
-          <button onClick={goHome} className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-black text-white">{shownGrade.badge}</div>
-            <div className="text-left">
-              <div className="text-sm font-black leading-tight sm:text-base">英検{shownGrade.label} 面接シミュレーター</div>
+          <button onClick={() => guardLeave(goHome)} aria-label="ホームへ戻る" className="flex min-w-0 items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-black text-white">{shownGrade.badge}</div>
+            <div className="min-w-0 text-left">
+              <div className="truncate text-sm font-black leading-tight sm:text-base">
+                英検{shownGrade.label} 面接<span className="hidden min-[420px]:inline">シミュレーター</span>
+              </div>
               <div className="hidden text-[11px] text-slate-500 sm:block">2次試験（スピーキング）本番形式トレーニング</div>
             </div>
           </button>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <span
               className={`hidden items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold sm:inline-flex ${
                 useClaude ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -341,15 +483,16 @@ export default function App() {
               <Sparkles className="h-3 w-3" /> {useClaude ? `${ai} 採点 ON` : '簡易採点'}
             </span>
             <button
-              onClick={openHistory}
+              onClick={() => guardLeave(openHistory)}
+              aria-label="練習の記録"
               className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold hover:bg-indigo-50 ${screen === 'history' || screen === 'review' ? 'bg-indigo-50 text-indigo-700' : 'text-indigo-700'}`}
             >
               <CalendarDays className="h-4 w-4" /> <span className="hidden sm:inline">記録</span>
             </button>
-            <button onClick={() => setShowGuide(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
+            <button onClick={() => setShowGuide(true)} aria-label="攻略ガイド" className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
               <BookOpen className="h-4 w-4" /> <span className="hidden sm:inline">攻略ガイド</span>
             </button>
-            <button onClick={() => setShowSettings(true)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">
+            <button onClick={() => setShowSettings(true)} aria-label="設定" className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">
               <Settings className="h-4 w-4" /> <span className="hidden sm:inline">設定</span>
             </button>
             {canFullscreen && (
@@ -368,15 +511,20 @@ export default function App() {
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col p-3 sm:p-5">
         {screen === 'home' && !useClaude && (
-          <div className="mx-auto mb-4 flex w-full max-w-6xl flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="mx-auto mb-4 flex w-full max-w-6xl items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900 sm:px-4 sm:py-3 sm:text-sm">
             <Sparkles className="h-4 w-4 shrink-0" />
-            <span className="flex-1">Claude または Gemini の APIキーを設定すると、あなたの発話に合わせた詳しいAI採点・講評になります（未設定でも簡易採点で練習可能）。</span>
-            <button onClick={() => setShowSettings(true)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700">
+            <span className="flex-1">
+              <span className="sm:hidden">いまは簡易採点。APIキーを設定するとAIが詳しく採点・講評。</span>
+              <span className="hidden sm:inline">Claude または Gemini の APIキーを設定すると、あなたの発話に合わせた詳しいAI採点・講評になります（未設定でも簡易採点で練習可能）。</span>
+            </span>
+            <button onClick={() => setShowSettings(true)} className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700">
               APIキーを設定
             </button>
           </div>
         )}
-        {screen === 'home' && <HomeScreen cards={cards} settings={settings} history={gradeHistory} allHistory={history} onSettings={setSettings} onStart={start} onOpenHistory={openHistory} />}
+        {screen === 'home' && <HomeScreen cards={cards} settings={settings} history={gradeHistory} allHistory={history} onSettings={setSettings} onStart={(c) => start(c)} onOpenHistory={openHistory} onDemo={(c) => start(c, { demo: true })} onOpenDrill={openDrill} />}
+
+        {screen === 'drill' && <DrillScreen key={drillTab} cards={cards} gradeLabel={GRADES[settings.grade]?.label ?? '3級'} onSpeak={speakModel} onBack={goHome} initialTab={drillTab} />}
 
         {screen === 'history' && (
           <HistoryScreen history={history} day={historyDay} onDayChange={setHistoryDay} onOpen={openReview} onBack={goHome} cardExists={(id) => !!findCard(id)} />
@@ -391,6 +539,7 @@ export default function App() {
             aiPending={false}
             onSpeak={speakModel}
             onRetry={() => start(review.card)}
+            previousAspects={reviewPrev}
             onNext={() => {}}
             onHome={openHistory}
             achievements={[]}
@@ -414,17 +563,18 @@ export default function App() {
             onNext={nextCard}
             onHome={goHome}
             achievements={achievements}
+            previousAspects={reportPrev}
           />
         )}
 
         {screen === 'interview' && (
-          <div className="flex flex-1 flex-col gap-3 lg:h-[calc(100dvh-3.5rem-2.75rem)] lg:min-h-0 lg:flex-none">
+          <div ref={interviewRef} className="flex flex-1 flex-col gap-3 pb-[calc(var(--mic-h,11rem)+0.5rem)] lg:h-[calc(100dvh-3.5rem-2.75rem)] lg:min-h-0 lg:flex-none lg:pb-0">
             {/* progress */}
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-              <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
-                {settings.mode === 'exam' ? '本番' : quickRun ? 'クイック練習' : '練習'}
+              <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${demoRun ? 'bg-violet-600 text-white' : settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
+                {demoRun ? 'お手本デモ' : settings.mode === 'exam' ? '本番' : quickRun ? 'クイック練習' : '練習'}
               </span>
-              <div className="flex flex-1 items-center gap-1 overflow-x-auto">
+              <div ref={stepsRef} className="flex flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
                 {steps.map((s, i) => {
                   const firstIdx = phaseOrder.indexOf(s.id[0]);
                   const lastIdx = phaseOrder.indexOf(s.id[s.id.length - 1]);
@@ -434,6 +584,7 @@ export default function App() {
                     <React.Fragment key={s.label}>
                       {i > 0 && <div className={`h-0.5 w-2 shrink-0 sm:w-4 ${done || active ? 'bg-indigo-400' : 'bg-slate-200'}`} />}
                       <span
+                        aria-current={active ? 'step' : undefined}
                         className={`shrink-0 rounded-full px-2 py-0.5 text-[12px] font-bold ${
                           active ? 'bg-indigo-600 text-white shadow' : done ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
                         }`}
@@ -445,7 +596,7 @@ export default function App() {
                 })}
               </div>
               <button
-                onClick={goHome}
+                onClick={() => guardLeave(goHome)}
                 className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-bold text-rose-600 hover:bg-rose-50"
               >
                 <Square className="h-3 w-3" /> 中断
@@ -474,10 +625,10 @@ export default function App() {
                       {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
                     </IconToggle>
                   </div>
-                  <div className="mx-auto h-48 w-48 pt-4 sm:h-56 sm:w-56">
-                    <ExaminerFigure examiner={examiner} speaking={speaking} listening={listening} />
+                  <div className="mx-auto h-36 w-36 pt-3 sm:h-56 sm:w-56 sm:pt-4">
+                    <ExaminerFigure examiner={examiner} speaking={examinerSpeaking} listening={listening} />
                   </div>
-                  <div className="min-h-[5.5rem] border-t border-slate-200 bg-white/90 px-4 py-3">
+                  <div className="min-h-[4.5rem] border-t border-slate-200 bg-white/90 px-4 py-3 sm:min-h-[5.5rem]" aria-live="polite">
                     {examMode && phase !== 'scoring' ? (
                       <div className="flex items-center gap-3">
                         <div className="flex h-6 items-end gap-0.5">
@@ -495,8 +646,11 @@ export default function App() {
                       </div>
                     ) : line ? (
                       <>
+                        {line.who === 'candidate' && (
+                          <div className="mb-0.5 inline-block rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-black text-white">受験者（お手本）</div>
+                        )}
                         {showSubs ? (
-                          <div className={`text-base font-semibold leading-snug sm:text-lg ${speaking ? 'text-slate-900' : 'text-slate-600'}`}>“{line.text}”</div>
+                          <div className={`text-base font-semibold leading-snug sm:text-lg ${line.who === 'candidate' ? 'text-violet-900' : speaking ? 'text-slate-900' : 'text-slate-600'}`}>“{line.text}”</div>
                         ) : (
                           <div className="text-sm text-slate-400">（字幕オフ：耳で聞き取りましょう）</div>
                         )}
@@ -507,20 +661,40 @@ export default function App() {
                     )}
                   </div>
                 </div>
+                {/* スマホではカードを読みながら答えられるよう、画面下に固定 */}
+                <div ref={micWrapRef} className="fixed inset-x-0 bottom-0 z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:p-0">
+                {hintTarget && listening && !examMode && <HintBox target={hintTarget} shown={hintShown} onReveal={revealHint} />}
                 <MicBar
                   exam={examMode}
-                  speaking={speaking}
+                  speaking={examinerSpeaking}
                   listening={listening}
                   hint={hint}
                   interim={interim}
                   silence={silence}
-                  busyLabel={phase === 'silent_reading' ? '黙読中（声に出さずに読みましょう）' : phase === 'q2_prep' ? '準備時間（20秒）：3コマの流れを頭の中で組み立てましょう' : phase === 'scoring' ? '採点中…' : pending ? '解説を確認しましょう' : undefined}
+                  busyLabel={demoRun ? (demoRun === 'done' ? 'お手本デモはここまで' : 'お手本デモ：受験者役の答え方をよく聞きましょう') : phase === 'silent_reading' ? '黙読中（声に出さずに読みましょう）' : phase === 'q2_prep' ? '準備時間（20秒）：3コマの流れを頭の中で組み立てましょう' : phase === 'scoring' ? '採点中…' : pending ? '解説を確認しましょう' : undefined}
                 />
+                </div>
               </div>
 
               {/* card / feedback side */}
-              <div className="min-h-[420px] min-w-0 lg:col-span-7 lg:h-full lg:min-h-0">
-                {pending ? (
+              <div ref={cardPaneRef} className="min-h-[420px] min-w-0 scroll-mt-[4.25rem] lg:col-span-7 lg:h-full lg:min-h-0">
+                {demoRun === 'done' ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-6 text-center shadow-sm">
+                    <div className="text-lg font-black text-violet-900">お手本デモはここまで</div>
+                    <p className="max-w-sm text-sm text-violet-900/80">流れと答え方をつかんだら、同じカードで実際に答えてみましょう。</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button onClick={() => start(card)} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">
+                        このカードで挑戦（{settings.mode === 'exam' ? '本番モード' : '練習モード'}）
+                      </button>
+                      <button onClick={() => start(card, { demo: true })} className="rounded-xl border border-violet-300 bg-white px-4 py-2 text-sm font-bold text-violet-800 hover:bg-violet-100">
+                        もう一度見る
+                      </button>
+                      <button onClick={goHome} className="rounded-xl px-4 py-2 text-sm font-bold text-slate-600 hover:bg-white">
+                        ホームへ
+                      </button>
+                    </div>
+                  </div>
+                ) : pending ? (
                   <FeedbackPanel
                     key={pending.rec.item + pending.rec.answer}
                     card={card}
@@ -544,6 +718,30 @@ export default function App() {
         )}
       </main>
 
+      {leave && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn" onClick={closeLeave}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="leave-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 id="leave-title" className="text-base font-black text-slate-900">面接を中断しますか？</h2>
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-600">ここまでの回答と採点は記録に残りません。</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button autoFocus onClick={closeLeave} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">
+                面接を続ける
+              </button>
+              <button
+                onClick={() => {
+                  const run = leave.run;
+                  setLeave(null);
+                  run();
+                }}
+                className="rounded-xl border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50"
+              >
+                中断する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SettingsModal open={showSettings} settings={settings} status={status} onChange={setSettings} onClose={() => setShowSettings(false)} />
       <StrategyGuideModal isOpen={showGuide} grade={shownGrade.id} onClose={() => setShowGuide(false)} />
     </div>
@@ -566,6 +764,8 @@ const IconToggle: React.FC<{ on: boolean; onClick: () => void; title: string; ch
   <button
     onClick={onClick}
     title={title}
+    aria-label={title}
+    aria-pressed={on}
     className={`rounded-full p-1.5 transition ${on ? 'bg-indigo-600 text-white' : 'bg-white/80 text-slate-500 hover:bg-white'}`}
   >
     {children}

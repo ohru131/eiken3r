@@ -251,7 +251,16 @@ export interface ListenResult {
   text: string;
   latencySec: number | null;
   reason: ListenEndReason;
+  /** 話し始めてから途中で 1.5 秒以上止まった回数（音声認識時のみ） */
+  pauses?: number;
+  /** 話し始めてからの最長の沈黙（秒） */
+  longestPauseSec?: number;
+  /** 録音したクリップ ID（engine が付ける） */
+  audioId?: string;
 }
+
+/** 回答途中の「止まった」とみなす沈黙 */
+const PAUSE_MS = 1500;
 
 export interface ListenOptions {
   /** 話し終わりとみなす無音時間 */
@@ -265,6 +274,8 @@ export interface ListenOptions {
   onSpeechStart?: () => void;
   /** 無音カウントダウン (0-1) */
   onSilenceProgress?: (ratio: number) => void;
+  /** マイクが使えない（拒否・使用中）と分かったとき */
+  onMicDenied?: () => void;
 }
 
 /** 外部（ボタン・キーボード）から listen を終了させるためのハンドル */
@@ -275,6 +286,8 @@ export interface ListenHandle {
   skip: () => void;
   /** キーボード入力中など、自動タイムアウトを止める */
   hold: () => void;
+  /** ヒントを見ている間など、「無言タイムアウト」までの時間を延ばす */
+  extend?: () => void;
 }
 
 let activeHandle: ListenHandle | null = null;
@@ -297,6 +310,12 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
     let done = false;
     let held = false;
     let rec: any = null;
+    // 無言タイムアウトの起点（ヒント表示で延長する）
+    let waitFrom = startedAt;
+    let maxExtra = 0;
+    let pauses = 0;
+    let lastLen = 0;
+    let longestPause = 0;
     let ticker: ReturnType<typeof setInterval>;
 
     const current = () => `${finalText} ${interimText}`.replace(/\s+/g, ' ').trim();
@@ -316,7 +335,13 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
       const text = overrideText ?? current();
       const latency =
         reason === 'typed' ? (performance.now() - startedAt) / 1000 : firstSpeechAt ? (firstSpeechAt - startedAt) / 1000 : null;
-      resolve({ text, latencySec: latency !== null ? Math.round(latency * 10) / 10 : null, reason });
+      resolve({
+        text,
+        latencySec: latency !== null ? Math.round(latency * 10) / 10 : null,
+        reason,
+        pauses,
+        longestPauseSec: Math.round(longestPause / 100) / 10,
+      });
     };
 
     const onAbort = () => {
@@ -347,6 +372,11 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
         }
         rec = null;
       },
+      extend: () => {
+        waitFrom = performance.now();
+        lastActivity = performance.now();
+        maxExtra += 15000;
+      },
     };
 
     if (SR) {
@@ -363,7 +393,18 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
           else interim += r[0].transcript;
         }
         interimText = interim;
-        lastActivity = performance.now();
+        const now = performance.now();
+        // 文字が増えたときだけ間隔を測る（遅れて届く確定結果を「沈黙」と数えない）
+        const len = current().length;
+        if (len > lastLen) {
+          if (firstSpeechAt) {
+            const gap = now - lastActivity;
+            if (gap >= PAUSE_MS) pauses++;
+            longestPause = Math.max(longestPause, gap);
+          }
+          lastLen = len;
+        }
+        lastActivity = now;
         if (!firstSpeechAt && current()) {
           firstSpeechAt = performance.now();
           opts.onSpeechStart?.();
@@ -371,9 +412,10 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
         opts.onInterim?.(current());
       };
       rec.onerror = (e: any) => {
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          // マイク拒否 → キーボード入力待ちにする（タイムアウトは継続）
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture') {
+          // マイク拒否・使用不可 → キーボード入力待ちにする（タイムアウトは継続）
           rec = null;
+          opts.onMicDenied?.();
         }
       };
       rec.onend = () => {
@@ -396,10 +438,10 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
     ticker = setInterval(() => {
       if (held) return;
       const now = performance.now();
-      if (now - startedAt > opts.maxMs) return finish('maxtime');
+      if (now - startedAt > opts.maxMs + maxExtra) return finish('maxtime');
       if (!firstSpeechAt) {
         // 音声認識がない場合はキーボード入力をずっと待つ（maxMs まで）
-        if (SR && rec && now - startedAt > opts.noSpeechMs) return finish('nospeech');
+        if (SR && rec && now - waitFrom > opts.noSpeechMs) return finish('nospeech');
         return;
       }
       const silent = now - lastActivity;

@@ -4,6 +4,7 @@ import { AppSettings } from '../types';
 import { MODEL_OPTIONS } from '../lib/settings';
 import { ServerStatus } from '../lib/api';
 import { azureConfigured, testAzure } from '../lib/azurePronunciation';
+import { useModal } from '../lib/useModal';
 import { GEMINI_DEFAULT_EVAL_MODEL, GEMINI_DEFAULT_REPORT_MODEL, GEMINI_MODEL_SUGGESTIONS } from '../lib/geminiModels';
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChange, onClose }) => {
+  useModal(open, onClose);
   const [show, setShow] = useState(false);
   const [test, setTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'ng'; msg?: string }>({ state: 'idle' });
   const runTest = async () => {
@@ -31,10 +33,10 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label="設定" className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
           <h2 className="text-base font-black">設定</h2>
-          <button onClick={onClose} className="rounded-lg p-1 hover:bg-slate-100">
+          <button onClick={onClose} aria-label="設定を閉じる" className="rounded-lg p-1 hover:bg-slate-100">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -145,6 +147,8 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
             <Toggle label="練習モード：解説後に自動で次へ進む" checked={settings.autoAdvance} onChange={(v) => set('autoAdvance', v)} />
             <Toggle label="練習モード：満点解答・お手本音読を読み上げる" checked={settings.readModelAnswer} onChange={(v) => set('readModelAnswer', v)} />
             <Toggle label="練習モード：音読の前にお手本を聞く" checked={settings.listenModelFirst} onChange={(v) => set('listenModelFirst', v)} />
+            <Toggle label="練習モード：回答中に日本語ヒントボタンを出す" checked={settings.showHints} onChange={(v) => set('showHints', v)} />
+            <Toggle label="自分の回答を録音して聞き返す（Android では音声認識が止まる場合はオフ）" checked={settings.recordAudio} onChange={(v) => set('recordAudio', v)} />
           </section>
         </div>
       </div>

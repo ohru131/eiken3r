@@ -7,6 +7,9 @@ import { ModelReading, PronunciationNote, PronunciationView } from './ReadingRev
 import { Achievement, ScoreHero } from './ScoreHero';
 import { SceneIllustration } from './SceneIllustration';
 import { StoryStrip } from './StoryStrip';
+import { AspectRadar } from './AspectRadar';
+import { FluencyView, RecordingPlayer } from './AnswerExtras';
+import { AspectKey, computeAspects } from '../lib/aspects';
 
 interface Props {
   card: ExamCard;
@@ -20,9 +23,11 @@ interface Props {
   achievements: Achievement[];
   /** 過去の記録を振り返るとき（演出なし・ボタンを差し替え） */
   review?: { date: string; mode: InterviewMode; quick: boolean; retryLabel: string };
+  /** レーダーチャートで比べる前回の観点別スコア */
+  previousAspects?: { values: Record<AspectKey, number>; label: string } | null;
 }
 
-export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, onSpeak, onRetry, onNext, onHome, achievements, review }) => {
+export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, onSpeak, onRetry, onNext, onHome, achievements, review, previousAspects }) => {
   const ORDER = scoredItems(card);
   const [open, setOpen] = useState<Set<ScoredItem>>(new Set());
   const initialized = useRef(false);
@@ -63,6 +68,7 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
         </div>
       )}
       <ScoreHero card={card} report={report} achievements={achievements} quiet={!!review} />
+      <AspectRadar current={computeAspects(card, records, report)} previous={previousAspects} />
 
       <div className="flex justify-center">
         <button
@@ -184,9 +190,11 @@ export const ReportView: React.FC<Props> = ({ card, records, report, aiPending, 
                       </div>
                     )}
                   </div>
+                  {rec && <RecordingPlayer rec={rec} model={k === 'reading' ? `${card.title}. ${card.passage}` : rec.feedback?.improvedAnswer} onSpeak={onSpeak} />}
+                  {rec && <FluencyView rec={rec} onSpeak={onSpeak} />}
                   {rec?.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}
                   {!rec?.pronunciation && rec?.pronunciationNote && <PronunciationNote note={rec.pronunciationNote} />}
-                  {rec?.feedback && <FeedbackBody fb={rec.feedback} max={max} onSpeak={onSpeak} />}
+                  {rec?.feedback && <FeedbackBody fb={rec.feedback} max={max} onSpeak={onSpeak} phrase={k === 'reading' ? undefined : { card, rec }} />}
                   {k === 'reading' && <ModelReading card={card} onSpeak={onSpeak} />}
                   {q && (
                     <div className="rounded-lg bg-indigo-50 p-3 text-[14px]">
