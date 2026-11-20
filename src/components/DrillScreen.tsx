@@ -47,6 +47,8 @@ function useListener() {
   const ctrl = useRef<AbortController | null>(null);
   const typedResolve = useRef<((r: HeardResult | null) => void) | null>(null);
   const typedStart = useRef(0);
+  // マイクが拒否された・使えないと分かったら、以後は文字入力で答える
+  const micDenied = useRef(false);
   const [listening, setListening] = useState(false);
   const [typing, setTyping] = useState(false);
   const [interim, setInterim] = useState('');
@@ -68,17 +70,24 @@ function useListener() {
       abort();
       const c = new AbortController();
       ctrl.current = c;
-      if (!hasSpeechRecognition()) {
+      const typed = (): Promise<HeardResult | null> => {
         setTyping(true);
         typedStart.current = performance.now();
         return new Promise((resolve) => {
           typedResolve.current = resolve;
         });
-      }
+      };
+      if (!hasSpeechRecognition() || micDenied.current) return typed();
       setListening(true);
       playSfx('micOn');
+      let denied = false;
       try {
         const r = await listen({
+          onMicDenied: () => {
+            denied = true;
+            micDenied.current = true;
+            getActiveListen()?.skip();
+          },
           silenceMs: opts.silenceMs ?? 2000,
           noSpeechMs: 10000,
           maxMs: 30000,
@@ -86,7 +95,7 @@ function useListener() {
           onInterim: setInterim,
           onSilenceProgress: setSilence,
         });
-        return { text: r.text, latencySec: r.latencySec };
+        if (!denied) return { text: r.text, latencySec: r.latencySec };
       } catch (e) {
         if (e instanceof AbortedError || c.signal.aborted) return null;
         return { text: '', latencySec: null };
@@ -99,6 +108,8 @@ function useListener() {
           playSfx('micOff');
         }
       }
+      // マイクが使えなかった → この問題から文字入力に切り替え
+      return c.signal.aborted ? null : typed();
     },
     [abort],
   );

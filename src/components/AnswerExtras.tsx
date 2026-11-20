@@ -12,11 +12,21 @@ import { stopSpeaking } from '../lib/speech';
 type Speak = (text: string) => Promise<void>;
 
 /** 録音した自分の回答を再生。「交互に」で 自分 → 模範解答 → 自分 … */
-export const RecordingPlayer: React.FC<{ rec: AnswerRecord; model?: string; onSpeak: Speak }> = ({ rec, model, onSpeak }) => {
+export const RecordingPlayer: React.FC<{ rec: AnswerRecord; model?: string; onSpeak: Speak; onPlayingChange?: (playing: boolean) => void }> = ({
+  rec,
+  model,
+  onSpeak,
+  onPlayingChange,
+}) => {
   const [urls, setUrls] = useState<{ main: string | null; follow: string | null } | null>(null);
   const [playing, setPlaying] = useState<null | 'mine' | 'alt'>(null);
   const [step, setStep] = useState<'mine' | 'model' | null>(null);
   const acRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    onPlayingChange?.(!!playing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
 
   useEffect(() => {
     let alive = true;

@@ -134,7 +134,12 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
           )}
           {!!rec.hintsUsed && <div className="mt-1 text-[11px] font-bold text-violet-700">ヒントを{rec.hintsUsed}段階まで見て回答。次はヒントなしで挑戦</div>}
         </div>
-        <RecordingPlayer rec={rec} model={rec.item === 'reading' ? `${card.title}. ${card.passage}` : fb?.improvedAnswer} onSpeak={onSpeak} />
+        <RecordingPlayer
+          rec={rec}
+          model={rec.item === 'reading' ? `${card.title}. ${card.passage}` : fb?.improvedAnswer}
+          onSpeak={onSpeak}
+          onPlayingChange={(p) => p && setPaused(true)}
+        />
         <FluencyView rec={rec} onSpeak={onSpeak} />
 
         {rec.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}

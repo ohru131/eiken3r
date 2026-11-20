@@ -213,6 +213,9 @@ export default function App() {
     setScreen('interview');
     window.scrollTo({ top: 0 });
 
+    // 待機中（マイク許可ダイアログ等）に画面を離れたら開始しない
+    const ac = new AbortController();
+    abortRef.current = ac;
     if (!demo) {
       // マイク許可を先に取っておく（本番中にダイアログが出ないように）。録音する場合はマイクを開いたままにする
       if (settings.recordAudio && (await openRecorderMic())) {
@@ -225,10 +228,12 @@ export default function App() {
           /* キーボード入力で続行 */
         }
       }
+      if (ac.signal.aborted) {
+        if (abortRef.current === null || abortRef.current === ac) closeRecorderMic();
+        return;
+      }
     }
 
-    const ac = new AbortController();
-    abortRef.current = ac;
     const recMap = new Map<ScoredItem, AnswerRecord>();
     const bridge: Bridge = {
       setPhase,
@@ -268,7 +273,6 @@ export default function App() {
         demo,
         candidateVoice: { voiceHints: other.voiceHints, rate: other.rate, pitch: Math.min(1.4, other.pitch + 0.15) },
       });
-      closeRecorderMic();
       if (demo) {
         if (!ac.signal.aborted) {
           setPhase('report');
@@ -347,6 +351,9 @@ export default function App() {
       setAiPending(false);
     } catch (e) {
       if (!(e instanceof AbortedError)) console.error(e);
+    } finally {
+      // 別の面接が始まっていなければマイクを閉じる
+      if (abortRef.current === ac || abortRef.current === null) closeRecorderMic();
     }
   };
 

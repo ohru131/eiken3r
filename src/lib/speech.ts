@@ -274,6 +274,8 @@ export interface ListenOptions {
   onSpeechStart?: () => void;
   /** 無音カウントダウン (0-1) */
   onSilenceProgress?: (ratio: number) => void;
+  /** マイクが使えない（拒否・使用中）と分かったとき */
+  onMicDenied?: () => void;
 }
 
 /** 外部（ボタン・キーボード）から listen を終了させるためのハンドル */
@@ -312,6 +314,7 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
     let waitFrom = startedAt;
     let maxExtra = 0;
     let pauses = 0;
+    let lastLen = 0;
     let longestPause = 0;
     let ticker: ReturnType<typeof setInterval>;
 
@@ -391,10 +394,15 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
         }
         interimText = interim;
         const now = performance.now();
-        if (firstSpeechAt) {
-          const gap = now - lastActivity;
-          if (gap >= PAUSE_MS) pauses++;
-          longestPause = Math.max(longestPause, gap);
+        // 文字が増えたときだけ間隔を測る（遅れて届く確定結果を「沈黙」と数えない）
+        const len = current().length;
+        if (len > lastLen) {
+          if (firstSpeechAt) {
+            const gap = now - lastActivity;
+            if (gap >= PAUSE_MS) pauses++;
+            longestPause = Math.max(longestPause, gap);
+          }
+          lastLen = len;
         }
         lastActivity = now;
         if (!firstSpeechAt && current()) {
@@ -404,9 +412,10 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
         opts.onInterim?.(current());
       };
       rec.onerror = (e: any) => {
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          // マイク拒否 → キーボード入力待ちにする（タイムアウトは継続）
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture') {
+          // マイク拒否・使用不可 → キーボード入力待ちにする（タイムアウトは継続）
           rec = null;
+          opts.onMicDenied?.();
         }
       };
       rec.onend = () => {

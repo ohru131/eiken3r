@@ -30,9 +30,24 @@ function db(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
+/** 再生用 URL のキャッシュ（多くなりすぎたら古いものから解放） */
 const urlCache = new Map<string, string>();
+const URL_CACHE_MAX = 30;
+function cacheUrl(id: string, url: string) {
+  urlCache.set(id, url);
+  while (urlCache.size > URL_CACHE_MAX) {
+    const [oldId, oldUrl] = urlCache.entries().next().value as [string, string];
+    urlCache.delete(oldId);
+    // 再生中の可能性があるので少し待ってから解放
+    setTimeout(() => URL.revokeObjectURL(oldUrl), 120_000);
+  }
+}
+
+/** 保存中のクリップ（IndexedDB に書き終わるまで、再生はここから） */
+const pending = new Map<string, Blob>();
 
 async function putClip(id: string, blob: Blob) {
+  pending.set(id, blob);
   try {
     const d = await db();
     await new Promise<void>((resolve, reject) => {
@@ -44,6 +59,8 @@ async function putClip(id: string, blob: Blob) {
     void prune();
   } catch (e) {
     console.warn('録音の保存に失敗', e);
+  } finally {
+    pending.delete(id);
   }
 }
 
@@ -59,11 +76,7 @@ async function prune() {
     store.index('createdAt').openCursor().onsuccess = (e) => {
       const cur = (e.target as IDBRequest<IDBCursorWithValue | null>).result;
       if (!cur || extra <= 0) return;
-      const id = (cur.value as ClipRow).id;
       cur.delete();
-      const u = urlCache.get(id);
-      if (u) URL.revokeObjectURL(u);
-      urlCache.delete(id);
       extra--;
       cur.continue();
     };
@@ -74,6 +87,12 @@ async function prune() {
 export async function clipUrl(id: string): Promise<string | null> {
   const cached = urlCache.get(id);
   if (cached) return cached;
+  const p = pending.get(id);
+  if (p) {
+    const u = URL.createObjectURL(p);
+    cacheUrl(id, u);
+    return u;
+  }
   try {
     const d = await db();
     const row = await new Promise<ClipRow | undefined>((resolve, reject) => {
@@ -83,7 +102,7 @@ export async function clipUrl(id: string): Promise<string | null> {
     });
     if (!row) return null;
     const u = URL.createObjectURL(row.blob);
-    urlCache.set(id, u);
+    cacheUrl(id, u);
     return u;
   } catch {
     return null;
@@ -101,7 +120,10 @@ export async function openRecorderMic(): Promise<boolean> {
   if (!canRecord()) return false;
   if (stream?.active) return true;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    // 同時に開いた別の呼び出しが先に開いていたら、こちらは閉じる
+    if (stream?.active) s.getTracks().forEach((t) => t.stop());
+    else stream = s;
     return true;
   } catch {
     stream = null;
@@ -142,20 +164,29 @@ export function startRecording(): Recording | null {
   return {
     stop: (keep) =>
       new Promise((resolve) => {
-        const done = async () => {
-          if (!keep || !chunks.length) return resolve(null);
-          const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
-          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          urlCache.set(id, URL.createObjectURL(blob));
-          await putClip(id, blob);
+        let settled = false;
+        const finish = (id: string | null) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(guard);
           resolve(id);
         };
-        if (rec.state === 'inactive') return void done();
-        rec.onstop = () => void done();
+        // onstop が来ない実装に備え、面接の進行を止めないよう最大1.5秒で諦める
+        const guard = setTimeout(() => finish(null), 1500);
+        const done = () => {
+          if (!keep || !chunks.length) return finish(null);
+          const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          // 保存は裏で行う（IndexedDB の応答を待たない）
+          void putClip(id, blob);
+          finish(id);
+        };
+        if (rec.state === 'inactive') return done();
+        rec.onstop = done;
         try {
           rec.stop();
         } catch {
-          resolve(null);
+          finish(null);
         }
       }),
   };
