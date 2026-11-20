@@ -167,7 +167,28 @@ export interface StepFeedback {
   corrections: string;
   improvedAnswer: string;
   tip: string;
+  /** 観点別スコア（0-5）。AI 採点時のみ。音読は無し */
+  aspects?: AspectScores;
   source: AiSource;
+}
+
+/** AI が付ける観点別スコア（0-5） */
+export interface AspectScores {
+  grammar: number;
+  vocabulary: number;
+  content: number;
+}
+
+/** 話し方の分析（沈黙・つなぎ言葉） */
+export interface FluencyStats {
+  /** 回答の途中で 1.5 秒以上止まった回数 */
+  pauses: number;
+  /** 回答途中の最長の沈黙（秒） */
+  longestPauseSec: number;
+  /** 検出したつなぎ言葉（um, uh, えーと 等） */
+  fillers: string[];
+  /** 同じ語の言い直し（I I, the the 等）の回数 */
+  repeats: number;
 }
 
 /** Azure 発音評価の結果（音読のみ） */
@@ -202,6 +223,13 @@ export interface AnswerRecord {
   pronunciation?: ReadingAssessment;
   /** 発音評価ができなかった理由（Azure 設定時のみ） */
   pronunciationNote?: string;
+  /** 録音した自分の回答（audioStore のクリップ ID） */
+  audioId?: string;
+  followUpAudioId?: string;
+  /** 話し方の分析 */
+  fluency?: FluencyStats;
+  /** 練習モードで見たヒントの段階数 */
+  hintsUsed?: number;
 }
 
 export interface FinalReport {
@@ -270,4 +298,8 @@ export interface AppSettings {
   /** Azure Speech（音読の発音評価） */
   azureKey: string;
   azureRegion: string;
+  /** 自分の回答を録音して、あとで聞き返せるようにする */
+  recordAudio: boolean;
+  /** 練習モード: 回答中に日本語ヒントボタンを出す */
+  showHints: boolean;
 }

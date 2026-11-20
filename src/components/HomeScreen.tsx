@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { practiceStreak, practicedToday, recentAverage, weekCount } from '../lib/stats';
-import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame, Zap, CalendarDays } from 'lucide-react';
+import { Play, Shuffle, GraduationCap, Dumbbell, Mic, Timer, MessageSquare, CheckCircle2, Flame, Zap, CalendarDays, Clapperboard, Repeat, Languages, BookMarked } from 'lucide-react';
+import { duePhrases, loadPhrases } from '../lib/phrasebook';
+import type { DrillTab } from './DrillScreen';
 import { AppSettings, ExamCard, Grade, HistoryRecord, InterviewMode } from '../types';
 import { GRADES, GRADE_ORDER } from '../lib/grade';
 import { EXAMINERS } from '../data/examiners';
@@ -17,6 +19,9 @@ interface Props {
   onSettings: (s: AppSettings) => void;
   onStart: (card: ExamCard) => void;
   onOpenHistory: () => void;
+  /** お手本デモ（受験者役も自動で話す）を見る */
+  onDemo: (card: ExamCard) => void;
+  onOpenDrill: (tab: DrillTab) => void;
 }
 
 const ProgressPanel: React.FC<{ history: HistoryRecord[]; allHistory: HistoryRecord[]; total: number; passed: number }> = ({ history, allHistory, total, passed }) => {
@@ -89,7 +94,17 @@ const STATUS_CARD: Record<Status, string> = {
   passed: 'border-emerald-300 bg-emerald-50/40',
 };
 
-export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHistory, onSettings, onStart, onOpenHistory }) => {
+export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHistory, onSettings, onStart, onOpenHistory, onDemo, onOpenDrill }) => {
+  const [phraseStat, setPhraseStat] = useState({ total: 0, due: 0 });
+  useEffect(() => {
+    const upd = () => {
+      const all = loadPhrases();
+      setPhraseStat({ total: all.length, due: duePhrases(all).length });
+    };
+    upd();
+    window.addEventListener('phrasebook-change', upd);
+    return () => window.removeEventListener('phrasebook-change', upd);
+  }, []);
   const [level, setLevel] = useState<'all' | ExamCard['level']>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | Status>('all');
   const best = useMemo(() => {
@@ -262,6 +277,33 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
         </div>
       </section>
 
+      {/* トレーニング */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-2 flex items-baseline gap-2">
+          <div className="text-sm font-black text-slate-900">トレーニング</div>
+          <div className="text-[12px] text-slate-500">面接の前後に、答え方を体に入れる</div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {(
+            [
+              [Clapperboard, 'お手本デモ', '受験者役も話す面接を通しで見る', () => randomPool.length && onDemo(randomPool[Math.floor(Math.random() * randomPool.length)]), null],
+              [Repeat, 'シャドーイング', '模範解答を聞いてまねして言う', () => onOpenDrill('repeat'), null],
+              [Languages, '瞬間英作文', '日本語を見てすぐ英語で言う', () => onOpenDrill('instant'), null],
+              [BookMarked, '表現帳', phraseStat.total ? `保存 ${phraseStat.total}件` : '解説の＋表現帳で保存', () => onOpenDrill('phrasebook'), phraseStat.due ? `復習 ${phraseStat.due}` : null],
+            ] as const
+          ).map(([Icon, title, desc, onClick, badge]) => (
+            <button key={title} onClick={onClick} className="relative flex items-start gap-2 rounded-xl border-2 border-slate-200 p-2.5 text-left transition hover:border-indigo-400 hover:bg-indigo-50/40">
+              <Icon className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
+              <span className="min-w-0">
+                <span className="block text-sm font-black text-slate-900">{title}</span>
+                <span className="block text-[11px] leading-snug text-slate-500">{desc}</span>
+              </span>
+              {badge && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow">{badge}</span>}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {/* cards */}
       <section>
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -312,10 +354,10 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
           {list.map((c) => {
             const st = statusOf(c);
             return (
+            <div key={c.id} className="relative">
             <button
-              key={c.id}
               onClick={() => onStart(c)}
-              className={`group flex flex-col rounded-2xl border-2 p-3.5 text-left sm:p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md ${STATUS_CARD[st]}`}
+              className={`group flex h-full w-full flex-col rounded-2xl border-2 p-3.5 text-left sm:p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md ${STATUS_CARD[st]}`}
             >
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-black text-slate-400">#{String(cards.indexOf(c) + 1).padStart(2, '0')}</span>
@@ -342,7 +384,17 @@ export const HomeScreen: React.FC<Props> = ({ cards, settings, history, allHisto
                   <Play className="h-4 w-4 fill-current" />
                 </span>
               </div>
+              {/* 右下のお手本ボタンぶんの余白 */}
+              <div className="h-5" />
             </button>
+            <button
+              onClick={() => onDemo(c)}
+              aria-label={`${c.title} のお手本デモを見る`}
+              className="absolute bottom-2.5 right-3 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600 shadow-sm hover:border-indigo-300 hover:text-indigo-700"
+            >
+              <Clapperboard className="h-3 w-3" /> お手本を見る
+            </button>
+            </div>
             );
           })}
         </div>

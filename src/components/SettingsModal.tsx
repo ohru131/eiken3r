@@ -147,6 +147,8 @@ export const SettingsModal: React.FC<Props> = ({ open, settings, status, onChang
             <Toggle label="練習モード：解説後に自動で次へ進む" checked={settings.autoAdvance} onChange={(v) => set('autoAdvance', v)} />
             <Toggle label="練習モード：満点解答・お手本音読を読み上げる" checked={settings.readModelAnswer} onChange={(v) => set('readModelAnswer', v)} />
             <Toggle label="練習モード：音読の前にお手本を聞く" checked={settings.listenModelFirst} onChange={(v) => set('listenModelFirst', v)} />
+            <Toggle label="練習モード：回答中に日本語ヒントボタンを出す" checked={settings.showHints} onChange={(v) => set('showHints', v)} />
+            <Toggle label="自分の回答を録音して聞き返す（Android では音声認識が止まる場合はオフ）" checked={settings.recordAudio} onChange={(v) => set('recordAudio', v)} />
           </section>
         </div>
       </div>

@@ -37,6 +37,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   listenModelFirst: true,
   azureKey: '',
   azureRegion: 'japaneast',
+  // Android / iOS は音声認識・読み上げと録音を同時に使うと不安定になることがあるため、既定でオフ
+  recordAudio: typeof navigator === 'undefined' || !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+  showHints: true,
 };
 
 export function loadSettings(): AppSettings {
