@@ -37,6 +37,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   listenModelFirst: true,
   azureKey: '',
   azureRegion: 'japaneast',
+  // Android の Chrome は音声認識と録音を同時に使うと認識が止まることがあるため、既定でオフ
+  recordAudio: typeof navigator === 'undefined' || !/Android/i.test(navigator.userAgent),
+  showHints: true,
 };
 
 export function loadSettings(): AppSettings {

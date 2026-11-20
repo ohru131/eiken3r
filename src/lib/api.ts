@@ -72,6 +72,7 @@ export async function evaluateAnswer(
     pardonUsed: rec.pardonUsed,
     maxScore: maxScore(card, rec.item),
     pronunciationSummary: rec.pronunciation ? summarizeAssessment(rec.pronunciation) : undefined,
+    speakingNote: speakingNote(rec),
   };
   try {
     if (settings.aiProvider === 'gemini') return await (await loadGemini()).evaluateWithGemini(settings.geminiKey, settings.geminiEvalModel, body);
@@ -79,6 +80,20 @@ export async function evaluateAnswer(
   } catch (e: any) {
     return { ...localEvaluate(card, rec), error: e?.message || 'network' };
   }
+}
+
+/** AI に渡す話し方の分析（何も無ければ undefined） */
+function speakingNote(rec: AnswerRecord): string | undefined {
+  if (rec.item === 'reading') return undefined;
+  const f = rec.fluency;
+  const parts = [
+    rec.latencySec !== null ? `話し始めまで ${rec.latencySec}秒` : '',
+    f ? `途中の沈黙(1.5秒以上) ${f.pauses}回・最長 ${f.longestPauseSec}秒` : '',
+    f?.fillers.length ? `つなぎ言葉 ${f.fillers.join(', ')}` : '',
+    f?.repeats ? `言い直し ${f.repeats}回` : '',
+    rec.hintsUsed ? `練習モードで日本語ヒントを ${rec.hintsUsed}段階まで見て回答（点数は変えず、コメントで自力で言えるよう励ます）` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' / ') : undefined;
 }
 
 export async function generateReport(

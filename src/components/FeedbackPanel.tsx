@@ -10,6 +10,7 @@ import { FeedbackAction } from '../engine/interview';
 import { ModelReading, PronunciationNote, PronunciationView } from './ReadingReview';
 import { SceneIllustration } from './SceneIllustration';
 import { StoryStrip } from './StoryStrip';
+import { FluencyView, PhraseButton, RecordingPlayer, modelJa } from './AnswerExtras';
 
 interface Props {
   card: ExamCard;
@@ -131,7 +132,10 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
               <div className="font-semibold text-slate-900">{rec.followUpAnswer || '（無回答）'}</div>
             </div>
           )}
+          {!!rec.hintsUsed && <div className="mt-1 text-[11px] font-bold text-violet-700">ヒントを{rec.hintsUsed}段階まで見て回答。次はヒントなしで挑戦</div>}
         </div>
+        <RecordingPlayer rec={rec} model={rec.item === 'reading' ? `${card.title}. ${card.passage}` : fb?.improvedAnswer} onSpeak={onSpeak} />
+        <FluencyView rec={rec} onSpeak={onSpeak} />
 
         {rec.pronunciation && <PronunciationView a={rec.pronunciation} onSpeak={onSpeak} />}
         {!rec.pronunciation && rec.pronunciationNote && <PronunciationNote note={rec.pronunciationNote} />}
@@ -148,7 +152,7 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
             <Loader2 className="h-5 w-5 animate-spin" /> 採点中…
           </div>
         ) : (
-          <FeedbackBody fb={fb} max={max} onSpeak={onSpeak} />
+          <FeedbackBody fb={fb} max={max} onSpeak={onSpeak} phrase={rec.item === 'reading' ? undefined : { card, rec }} />
         )}
 
         {q && (
@@ -159,11 +163,11 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
             </div>
             <p className="text-[14px] leading-relaxed text-slate-800">{q.explanation}</p>
             <div className="text-[12px] text-slate-500">{q.ja}</div>
-            <ModelList title="模範解答" items={models} onSpeak={onSpeak} />
+            <ModelList title="模範解答" items={models} onSpeak={onSpeak} phrase={{ card, rec, q }} />
             {hasFollowUp(q) && (
               <>
-                <ModelList title={`Yes の後「${q.followUpYes}」への答え方`} items={q.modelAnswersYes} onSpeak={onSpeak} />
-                <ModelList title={`No の後「${q.followUpNo}」への答え方`} items={q.modelAnswersNo} onSpeak={onSpeak} />
+                <ModelList title={`Yes の後「${q.followUpYes}」への答え方`} items={q.modelAnswersYes} onSpeak={onSpeak} phrase={{ card, rec, q }} />
+                <ModelList title={`No の後「${q.followUpNo}」への答え方`} items={q.modelAnswersNo} onSpeak={onSpeak} phrase={{ card, rec, q }} />
               </>
             )}
             {q.commonMistakes && q.commonMistakes.length > 0 && (
@@ -210,7 +214,15 @@ export const FeedbackPanel: React.FC<Props> = ({ card, rec, evalPromise, autoAdv
   );
 };
 
-export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; max?: number; onSpeak: (t: string) => Promise<void> }> = ({ fb, max = 5, onSpeak }) => {
+type PhraseCtx = { card: ExamCard; rec: AnswerRecord };
+
+const ASPECT_LABELS = [
+  ['grammar', '文法'],
+  ['vocabulary', '語彙'],
+  ['content', '内容'],
+] as const;
+
+export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; max?: number; onSpeak: (t: string) => Promise<void>; phrase?: PhraseCtx }> = ({ fb, max = 5, onSpeak, phrase }) => {
   const s5 = scoreOutOf5(fb.score, max);
   return (
   <div className="space-y-2.5">
@@ -223,6 +235,15 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; max
       </span>
       <span className="text-[11px] text-slate-400">{fb.source === 'claude' ? 'Claude AI 採点' : fb.source === 'gemini' ? 'Gemini AI 採点' : '簡易採点（APIキー未設定）'}</span>
       {fb.error && <span className="text-[11px] text-rose-500">※AI採点失敗: {fb.error}</span>}
+      {fb.aspects && (
+        <span className="ml-auto flex gap-1">
+          {ASPECT_LABELS.map(([k, label]) => (
+            <span key={k} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-slate-600">
+              {label} {fb.aspects![k]}
+            </span>
+          ))}
+        </span>
+      )}
     </div>
     <p className="text-slate-800">
       <span className="font-bold text-emerald-700">◎ </span>
@@ -236,10 +257,19 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; max
       <button onClick={() => onSpeak(fb.improvedAnswer)} className="mt-0.5 shrink-0 rounded-full bg-emerald-600 p-1.5 text-white hover:bg-emerald-700">
         <Volume2 className="h-3.5 w-3.5" />
       </button>
-      <div>
+      <div className="min-w-0 flex-1">
         <div className="text-[11px] font-bold text-emerald-700">こう言えば満点</div>
         <div className="font-semibold text-emerald-950">{fb.improvedAnswer}</div>
       </div>
+      {phrase && (
+        <PhraseButton
+          card={phrase.card}
+          rec={phrase.rec}
+          en={fb.improvedAnswer}
+          ja={modelJa(phrase.card, phrase.rec, fb.improvedAnswer, getQuestion(phrase.card, phrase.rec.item))}
+          source="improved"
+        />
+      )}
     </div>
     <p className="flex items-start gap-1 text-[13px] text-slate-600">
       <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -249,7 +279,12 @@ export const FeedbackBody: React.FC<{ fb: StepFeedback & { error?: string }; max
   );
 };
 
-const ModelList: React.FC<{ title: string; items: string[]; onSpeak: (t: string) => Promise<void> }> = ({ title, items, onSpeak }) =>
+const ModelList: React.FC<{
+  title: string;
+  items: string[];
+  onSpeak: (t: string) => Promise<void>;
+  phrase?: PhraseCtx & { q: Parameters<typeof modelJa>[3] };
+}> = ({ title, items, onSpeak, phrase }) =>
   items?.length ? (
     <div>
       <div className="text-[12px] font-bold text-indigo-800">{title}</div>
@@ -259,7 +294,8 @@ const ModelList: React.FC<{ title: string; items: string[]; onSpeak: (t: string)
             <button onClick={() => onSpeak(m)} className="mt-0.5 shrink-0 text-indigo-500 hover:text-indigo-800">
               <Volume2 className="h-3.5 w-3.5" />
             </button>
-            <span className="text-slate-900">{m}</span>
+            <span className="min-w-0 flex-1 text-slate-900">{m}</span>
+            {phrase && <PhraseButton card={phrase.card} rec={phrase.rec} en={m} ja={modelJa(phrase.card, phrase.rec, m, phrase.q)} source="model" compact />}
           </li>
         ))}
       </ul>

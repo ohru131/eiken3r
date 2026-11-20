@@ -9,7 +9,7 @@ import { EXAMINERS } from './data/examiners';
 import { loadHistory, loadSettings, saveHistory, saveSettings } from './lib/settings';
 import { ServerStatus, aiName, canUseAI, fetchStatus, generateReport, EvalResult } from './lib/api';
 import { setSfxEnabled, playSfx, unlockAudio } from './lib/sfx';
-import { AbortedError, speak, stopSpeaking, unlockSpeech } from './lib/speech';
+import { AbortedError, getActiveListen, speak, stopSpeaking, unlockSpeech } from './lib/speech';
 import { PASS_LINE, scoreAttitude } from './lib/scoring';
 import { Bridge, CardState, FeedbackAction, runInterview } from './engine/interview';
 import { HomeScreen } from './components/HomeScreen';
@@ -25,8 +25,14 @@ import { StrategyGuideModal } from './components/StrategyGuideModal';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SessionDetail, loadSessionDetail, saveSessionDetail } from './lib/sessionLog';
 import { useModal } from './lib/useModal';
+import { closeRecorderMic, openRecorderMic } from './lib/audioStore';
+import { HintTarget } from './lib/hints';
+import { computeAspects } from './lib/aspects';
+import { HintBox } from './components/HintBox';
+import { DrillScreen, DrillTab } from './components/DrillScreen';
+import { Speaker } from './engine/interview';
 
-type Screen = 'home' | 'interview' | 'report' | 'history' | 'review';
+type Screen = 'home' | 'interview' | 'report' | 'history' | 'review' | 'drill';
 
 const CARDS_BY_GRADE: Record<Grade, ExamCard[]> = { '3': EXAM_CARDS, pre2: PRE2_CARDS, '2': GRADE2_CARDS };
 const ALL_CARDS = [...EXAM_CARDS, ...PRE2_CARDS, ...GRADE2_CARDS];
@@ -95,7 +101,7 @@ export default function App() {
 
   // interview live state
   const [phase, setPhase] = useState<PhaseId>('idle');
-  const [line, setLine] = useState<{ text: string; ja?: string } | null>(null);
+  const [line, setLine] = useState<{ text: string; ja?: string; who?: Speaker } | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
   const [hint, setHint] = useState('');
@@ -109,6 +115,15 @@ export default function App() {
   const [aiPending, setAiPending] = useState(false);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [quickRun, setQuickRun] = useState(false);
+  // お手本デモ（受験者役も自動で話す）。done = 最後まで再生した
+  const [demoRun, setDemoRun] = useState<null | 'running' | 'done'>(null);
+  const [drillTab, setDrillTab] = useState<DrillTab>('repeat');
+  // 練習モードのヒント
+  const [hintTarget, setHintTarget] = useState<HintTarget | null>(null);
+  const [hintShown, setHintShown] = useState(0);
+  const hintsUsedRef = useRef(0);
+  // 結果画面に出している回の ID（前回との比較用）
+  const [reportId, setReportId] = useState<string | null>(null);
   // 記録の振り返り
   const [review, setReview] = useState<{ detail: SessionDetail; card: ExamCard; date: string } | null>(null);
   const [historyDay, setHistoryDay] = useState<string | null>(null);
@@ -136,7 +151,7 @@ export default function App() {
         : GRADES[gradeOf(card)];
   const gradeHistory = useMemo(() => history.filter((h) => historyGrade(h) === settings.grade), [history, settings.grade]);
   // 本番モード: 字幕・ヒント・認識文字・黙読タイマーを出さない
-  const examMode = settings.mode === 'exam';
+  const examMode = settings.mode === 'exam' && !demoRun;
 
   useEffect(() => {
     fetchStatus().then(setStatus);
@@ -164,12 +179,17 @@ export default function App() {
     setPending(null);
     setReport(null);
     setAiPending(false);
+    setHintTarget(null);
+    setHintShown(0);
+    hintsUsedRef.current = 0;
+    setDemoRun(null);
   };
 
   const stopInterview = () => {
     abortRef.current?.abort();
     abortRef.current = null;
     stopSpeaking();
+    closeRecorderMic();
   };
 
   const goHome = () => {
@@ -178,25 +198,33 @@ export default function App() {
     setScreen('home');
   };
 
-  const start = async (c: ExamCard) => {
+  const start = async (c: ExamCard, opts: { demo?: boolean } = {}) => {
+    const demo = !!opts.demo;
     unlockAudio();
     stopInterview();
     unlockSpeech();
     resetLive();
     setCard(c);
     setReview(null);
-    const quick = settings.mode === 'practice' && settings.quickStart;
+    setDemoRun(demo ? 'running' : null);
+    const quick = settings.mode === 'practice' && settings.quickStart && !demo;
     setQuickRun(quick);
-    setShowJa(settings.mode === 'practice');
+    setShowJa(settings.mode === 'practice' || demo);
     setScreen('interview');
     window.scrollTo({ top: 0 });
 
-    // マイク許可を先に取っておく（本番中にダイアログが出ないように）
-    try {
-      const s = await navigator.mediaDevices?.getUserMedia({ audio: true });
-      s?.getTracks().forEach((t) => t.stop());
-    } catch {
-      /* キーボード入力で続行 */
+    if (!demo) {
+      // マイク許可を先に取っておく（本番中にダイアログが出ないように）。録音する場合はマイクを開いたままにする
+      if (settings.recordAudio && (await openRecorderMic())) {
+        /* 録音用に開いたまま */
+      } else {
+        try {
+          const s = await navigator.mediaDevices?.getUserMedia({ audio: true });
+          s?.getTracks().forEach((t) => t.stop());
+        } catch {
+          /* キーボード入力で続行 */
+        }
+      }
     }
 
     const ac = new AbortController();
@@ -204,7 +232,7 @@ export default function App() {
     const recMap = new Map<ScoredItem, AnswerRecord>();
     const bridge: Bridge = {
       setPhase,
-      setLine: (text, ja) => setLine(text ? { text, ja } : null),
+      setLine: (text, ja, who) => setLine(text ? { text, ja, who } : null),
       setSpeaking,
       setListening: (a, h) => {
         setListening(a);
@@ -222,10 +250,32 @@ export default function App() {
         new Promise<FeedbackAction>((resolve) => {
           setPending({ rec, promise, resolve });
         }).finally(() => setPending(null)),
+      setHintTarget: (t) => {
+        setHintTarget(t);
+        setHintShown(0);
+      },
+      takeHintsUsed: () => {
+        const n = hintsUsedRef.current;
+        hintsUsedRef.current = 0;
+        return n;
+      },
     };
 
+    // デモの受験者役: 面接官とは別の声
+    const other = EXAMINERS.find((e) => e.id !== examiner.id) ?? examiner;
     try {
-      const result = await runInterview(c, examiner, { ...settings }, useClaude, bridge, ac.signal);
+      const result = await runInterview(c, examiner, { ...settings }, useClaude, bridge, ac.signal, {
+        demo,
+        candidateVoice: { voiceHints: other.voiceHints, rate: other.rate, pitch: Math.min(1.4, other.pitch + 0.15) },
+      });
+      closeRecorderMic();
+      if (demo) {
+        if (!ac.signal.aborted) {
+          setPhase('report');
+          setDemoRun('done');
+        }
+        return;
+      }
       setPhase('scoring');
       await result.evals;
       if (ac.signal.aborted) return;
@@ -281,6 +331,7 @@ export default function App() {
       setHistory(saveHistory(nextHistory));
       saveSessionDetail(detail);
       setHistoryDay(null); // 次に記録を開いたときは最新の日を表示
+      setReportId(h.id);
       setReport(base);
       setRecords(recs);
       setPhase('report');
@@ -299,9 +350,44 @@ export default function App() {
     }
   };
 
+  /** 前回（同じ級で、この回より前）の観点別スコア */
+  const previousAspects = (id: string | null, grade: Grade) => {
+    if (!id) return null;
+    for (const h of history) {
+      if (h.id === id || Number(h.id) >= Number(id) || historyGrade(h) !== grade) continue;
+      const d = loadSessionDetail(h.id);
+      const c = findCard(h.cardId);
+      if (!d || !c) continue;
+      return { values: computeAspects(c, d.records, d.report).values, label: `前回（${h.date.split(' ')[0]}）` };
+    }
+    return null;
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const reportPrev = useMemo(() => previousAspects(reportId, gradeOf(card)), [reportId, card, history]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const reviewPrev = useMemo(() => (review ? previousAspects(review.detail.id, gradeOf(review.card)) : null), [review, history]);
+
+  const openDrill = (tab: DrillTab) => {
+    stopInterview();
+    resetLive();
+    setDrillTab(tab);
+    setScreen('drill');
+    window.scrollTo({ top: 0 });
+  };
+
+  const revealHint = () => {
+    setHintShown((n) => {
+      hintsUsedRef.current = Math.max(hintsUsedRef.current, n + 1);
+      return n + 1;
+    });
+    // ヒントを読んでいる間に「無言」で打ち切られないよう延長
+    getActiveListen()?.extend?.();
+  };
+
   /** 面接の途中なら確認してから実行（記録が残らないため） */
   const guardLeave = (run: () => void) => {
-    if (screen === 'interview' && phase !== 'idle') setLeave({ run });
+    if (screen === 'interview' && phase !== 'idle' && !demoRun) setLeave({ run });
     else run();
   };
   const closeLeave = useCallback(() => setLeave(null), []);
@@ -344,6 +430,8 @@ export default function App() {
   };
 
   const phaseIdx = phaseOrder.indexOf(phase);
+  // デモの受験者役が話している間は、面接官の口を動かさない
+  const examinerSpeaking = speaking && line?.who !== 'candidate';
 
   const openHistory = () => {
     stopInterview();
@@ -427,7 +515,9 @@ export default function App() {
             </button>
           </div>
         )}
-        {screen === 'home' && <HomeScreen cards={cards} settings={settings} history={gradeHistory} allHistory={history} onSettings={setSettings} onStart={start} onOpenHistory={openHistory} />}
+        {screen === 'home' && <HomeScreen cards={cards} settings={settings} history={gradeHistory} allHistory={history} onSettings={setSettings} onStart={(c) => start(c)} onOpenHistory={openHistory} onDemo={(c) => start(c, { demo: true })} onOpenDrill={openDrill} />}
+
+        {screen === 'drill' && <DrillScreen key={drillTab} cards={cards} gradeLabel={GRADES[settings.grade]?.label ?? '3級'} onSpeak={speakModel} onBack={goHome} initialTab={drillTab} />}
 
         {screen === 'history' && (
           <HistoryScreen history={history} day={historyDay} onDayChange={setHistoryDay} onOpen={openReview} onBack={goHome} cardExists={(id) => !!findCard(id)} />
@@ -442,6 +532,7 @@ export default function App() {
             aiPending={false}
             onSpeak={speakModel}
             onRetry={() => start(review.card)}
+            previousAspects={reviewPrev}
             onNext={() => {}}
             onHome={openHistory}
             achievements={[]}
@@ -465,6 +556,7 @@ export default function App() {
             onNext={nextCard}
             onHome={goHome}
             achievements={achievements}
+            previousAspects={reportPrev}
           />
         )}
 
@@ -472,8 +564,8 @@ export default function App() {
           <div ref={interviewRef} className="flex flex-1 flex-col gap-3 pb-[calc(var(--mic-h,11rem)+0.5rem)] lg:h-[calc(100dvh-3.5rem-2.75rem)] lg:min-h-0 lg:flex-none lg:pb-0">
             {/* progress */}
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-              <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
-                {settings.mode === 'exam' ? '本番' : quickRun ? 'クイック練習' : '練習'}
+              <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${demoRun ? 'bg-violet-600 text-white' : settings.mode === 'exam' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
+                {demoRun ? 'お手本デモ' : settings.mode === 'exam' ? '本番' : quickRun ? 'クイック練習' : '練習'}
               </span>
               <div ref={stepsRef} className="flex flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
                 {steps.map((s, i) => {
@@ -527,7 +619,7 @@ export default function App() {
                     </IconToggle>
                   </div>
                   <div className="mx-auto h-36 w-36 pt-3 sm:h-56 sm:w-56 sm:pt-4">
-                    <ExaminerFigure examiner={examiner} speaking={speaking} listening={listening} />
+                    <ExaminerFigure examiner={examiner} speaking={examinerSpeaking} listening={listening} />
                   </div>
                   <div className="min-h-[4.5rem] border-t border-slate-200 bg-white/90 px-4 py-3 sm:min-h-[5.5rem]" aria-live="polite">
                     {examMode && phase !== 'scoring' ? (
@@ -547,8 +639,11 @@ export default function App() {
                       </div>
                     ) : line ? (
                       <>
+                        {line.who === 'candidate' && (
+                          <div className="mb-0.5 inline-block rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-black text-white">受験者（お手本）</div>
+                        )}
                         {showSubs ? (
-                          <div className={`text-base font-semibold leading-snug sm:text-lg ${speaking ? 'text-slate-900' : 'text-slate-600'}`}>“{line.text}”</div>
+                          <div className={`text-base font-semibold leading-snug sm:text-lg ${line.who === 'candidate' ? 'text-violet-900' : speaking ? 'text-slate-900' : 'text-slate-600'}`}>“{line.text}”</div>
                         ) : (
                           <div className="text-sm text-slate-400">（字幕オフ：耳で聞き取りましょう）</div>
                         )}
@@ -561,21 +656,38 @@ export default function App() {
                 </div>
                 {/* スマホではカードを読みながら答えられるよう、画面下に固定 */}
                 <div ref={micWrapRef} className="fixed inset-x-0 bottom-0 z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:p-0">
+                {hintTarget && listening && !examMode && <HintBox target={hintTarget} shown={hintShown} onReveal={revealHint} />}
                 <MicBar
                   exam={examMode}
-                  speaking={speaking}
+                  speaking={examinerSpeaking}
                   listening={listening}
                   hint={hint}
                   interim={interim}
                   silence={silence}
-                  busyLabel={phase === 'silent_reading' ? '黙読中（声に出さずに読みましょう）' : phase === 'q2_prep' ? '準備時間（20秒）：3コマの流れを頭の中で組み立てましょう' : phase === 'scoring' ? '採点中…' : pending ? '解説を確認しましょう' : undefined}
+                  busyLabel={demoRun ? (demoRun === 'done' ? 'お手本デモはここまで' : 'お手本デモ：受験者役の答え方をよく聞きましょう') : phase === 'silent_reading' ? '黙読中（声に出さずに読みましょう）' : phase === 'q2_prep' ? '準備時間（20秒）：3コマの流れを頭の中で組み立てましょう' : phase === 'scoring' ? '採点中…' : pending ? '解説を確認しましょう' : undefined}
                 />
                 </div>
               </div>
 
               {/* card / feedback side */}
               <div ref={cardPaneRef} className="min-h-[420px] min-w-0 scroll-mt-[4.25rem] lg:col-span-7 lg:h-full lg:min-h-0">
-                {pending ? (
+                {demoRun === 'done' ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-6 text-center shadow-sm">
+                    <div className="text-lg font-black text-violet-900">お手本デモはここまで</div>
+                    <p className="max-w-sm text-sm text-violet-900/80">流れと答え方をつかんだら、同じカードで実際に答えてみましょう。</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button onClick={() => start(card)} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">
+                        このカードで挑戦（{settings.mode === 'exam' ? '本番モード' : '練習モード'}）
+                      </button>
+                      <button onClick={() => start(card, { demo: true })} className="rounded-xl border border-violet-300 bg-white px-4 py-2 text-sm font-bold text-violet-800 hover:bg-violet-100">
+                        もう一度見る
+                      </button>
+                      <button onClick={goHome} className="rounded-xl px-4 py-2 text-sm font-bold text-slate-600 hover:bg-white">
+                        ホームへ
+                      </button>
+                    </div>
+                  </div>
+                ) : pending ? (
                   <FeedbackPanel
                     key={pending.rec.item + pending.rec.answer}
                     card={card}

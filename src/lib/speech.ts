@@ -251,7 +251,16 @@ export interface ListenResult {
   text: string;
   latencySec: number | null;
   reason: ListenEndReason;
+  /** 話し始めてから途中で 1.5 秒以上止まった回数（音声認識時のみ） */
+  pauses?: number;
+  /** 話し始めてからの最長の沈黙（秒） */
+  longestPauseSec?: number;
+  /** 録音したクリップ ID（engine が付ける） */
+  audioId?: string;
 }
+
+/** 回答途中の「止まった」とみなす沈黙 */
+const PAUSE_MS = 1500;
 
 export interface ListenOptions {
   /** 話し終わりとみなす無音時間 */
@@ -275,6 +284,8 @@ export interface ListenHandle {
   skip: () => void;
   /** キーボード入力中など、自動タイムアウトを止める */
   hold: () => void;
+  /** ヒントを見ている間など、「無言タイムアウト」までの時間を延ばす */
+  extend?: () => void;
 }
 
 let activeHandle: ListenHandle | null = null;
@@ -297,6 +308,11 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
     let done = false;
     let held = false;
     let rec: any = null;
+    // 無言タイムアウトの起点（ヒント表示で延長する）
+    let waitFrom = startedAt;
+    let maxExtra = 0;
+    let pauses = 0;
+    let longestPause = 0;
     let ticker: ReturnType<typeof setInterval>;
 
     const current = () => `${finalText} ${interimText}`.replace(/\s+/g, ' ').trim();
@@ -316,7 +332,13 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
       const text = overrideText ?? current();
       const latency =
         reason === 'typed' ? (performance.now() - startedAt) / 1000 : firstSpeechAt ? (firstSpeechAt - startedAt) / 1000 : null;
-      resolve({ text, latencySec: latency !== null ? Math.round(latency * 10) / 10 : null, reason });
+      resolve({
+        text,
+        latencySec: latency !== null ? Math.round(latency * 10) / 10 : null,
+        reason,
+        pauses,
+        longestPauseSec: Math.round(longestPause / 100) / 10,
+      });
     };
 
     const onAbort = () => {
@@ -347,6 +369,11 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
         }
         rec = null;
       },
+      extend: () => {
+        waitFrom = performance.now();
+        lastActivity = performance.now();
+        maxExtra += 15000;
+      },
     };
 
     if (SR) {
@@ -363,7 +390,13 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
           else interim += r[0].transcript;
         }
         interimText = interim;
-        lastActivity = performance.now();
+        const now = performance.now();
+        if (firstSpeechAt) {
+          const gap = now - lastActivity;
+          if (gap >= PAUSE_MS) pauses++;
+          longestPause = Math.max(longestPause, gap);
+        }
+        lastActivity = now;
         if (!firstSpeechAt && current()) {
           firstSpeechAt = performance.now();
           opts.onSpeechStart?.();
@@ -396,10 +429,10 @@ export function listen(opts: ListenOptions): Promise<ListenResult> {
     ticker = setInterval(() => {
       if (held) return;
       const now = performance.now();
-      if (now - startedAt > opts.maxMs) return finish('maxtime');
+      if (now - startedAt > opts.maxMs + maxExtra) return finish('maxtime');
       if (!firstSpeechAt) {
         // 音声認識がない場合はキーボード入力をずっと待つ（maxMs まで）
-        if (SR && rec && now - startedAt > opts.noSpeechMs) return finish('nospeech');
+        if (SR && rec && now - waitFrom > opts.noSpeechMs) return finish('nospeech');
         return;
       }
       const silent = now - lastActivity;

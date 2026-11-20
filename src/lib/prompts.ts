@@ -9,7 +9,18 @@ export const FeedbackSchema = z.object({
   corrections: z.string().describe('誤り・不足の具体的な指摘と直し方。日本語1-3文。問題がなければ「特になし」'),
   improvedAnswer: z.string().describe('受験者の意図を活かした満点の英語解答（通常1-2文。2級 No.2 はナレーション全文）'),
   tip: z.string().describe('この設問タイプの本番で使えるコツ。日本語1文'),
+  aspects: z
+    .object({
+      grammar: z.number().int().describe('文法の正確さ 0-5'),
+      vocabulary: z.number().int().describe('語彙・表現の適切さと幅 0-5'),
+      content: z.number().int().describe('内容（質問への的確さ・情報量・論理） 0-5'),
+    })
+    .describe('観点別スコア（各0-5の整数）。無回答なら全て0'),
 });
+
+/** 観点別スコアを 0-5 に丸める */
+export const clampAspects = (a?: { grammar: number; vocabulary: number; content: number }) =>
+  a ? { grammar: clampScore(a.grammar), vocabulary: clampScore(a.vocabulary), content: clampScore(a.content) } : undefined;
 
 export const EVAL_SYSTEM = `あなたは英検3級2次試験（面接）の採点官です。受験者の発話は音声認識テキストなので、句読点・大文字小文字・軽微な認識ゆれは減点しません。
 採点基準 (0-5点):
@@ -86,6 +97,8 @@ export interface EvaluateInput {
   maxScore?: number;
   /** 音読の Azure 発音評価の要約 */
   pronunciationSummary?: string;
+  /** 話し方の機械分析（沈黙・つなぎ言葉）と、練習モードで見たヒントの段階数 */
+  speakingNote?: string;
 }
 
 /** 採点入力から満点を決める（不正な値は5点） */
@@ -103,6 +116,10 @@ export function buildEvalPrompt(b: EvaluateInput): { system: string; user: strin
     `【受験者の回答（音声認識）】"${b.answer || ''}"`,
     b.followUpQuestion ? `【追加質問】${b.followUpQuestion}\n【追加質問への回答】"${b.followUpAnswer || ''}"` : '',
     b.pardonUsed ? '（受験者は聞き返しをしました。1回までは減点しません）' : '',
+    b.speakingNote
+      ? `【話し方の機械分析（参考）】${b.speakingNote}\n→ score は内容と文法で決め、話し方では原則減点しない。沈黙やつなぎ言葉が目立つ場合は tip で英語のつなぎ表現（Well, ... / Let me see.）を勧める。`
+      : '',
+    '【観点別スコア】aspects に grammar（文法）・vocabulary（語彙・表現）・content（内容）を各0-5で付ける。音読では本文の読みの正確さを grammar・vocabulary に、タイトルと本文を読み切れたかを content に反映する。',
     b.pronunciationSummary
       ? `【Azure 発音評価（実際の音声を機械評価）】\n${b.pronunciationSummary}\n→ 音読の点数はこの発音評価を主な根拠にし、弱い語の発音のコツを具体的に指摘すること。`
       : '',
